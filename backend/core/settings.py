@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     )
 
     # Application role: subject to row-level security.
-    database_url: str = "postgresql+psycopg://cmp_app:change-me-app@localhost:5432/cmp"
+    database_url: str = "postgresql+psycopg://cmp_app:change-me-app@127.0.0.1:5432/cmp"
     # Owner role: migrations only.
-    database_owner_url: str = "postgresql+psycopg://cmp_owner:change-me-owner@localhost:5432/cmp"
+    database_owner_url: str = "postgresql+psycopg://cmp_owner:change-me-owner@127.0.0.1:5432/cmp"
     cmp_models_config: Path = REPO_ROOT / "config" / "models.yaml"
 
 

@@ -162,6 +162,8 @@ cp .env.example .env
 docker compose -f infra/docker-compose.dev.yml --env-file .env up -d
 #   with an NVIDIA GPU for Ollama, add: -f infra/docker-compose.dev.gpu.yml
 #   with the reranker, add:            --profile rerank
+#   macOS: containers get no GPU (no Metal), so run the native Ollama app instead and start
+#   only Postgres: ... up -d postgres   (OLLAMA_API_BASE=http://127.0.0.1:11434 stays the same)
 docker compose -f infra/docker-compose.dev.yml --env-file .env exec ollama ollama pull bge-m3:567m
 
 # backend

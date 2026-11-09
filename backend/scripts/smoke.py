@@ -4,6 +4,7 @@
     uv run python -m scripts.smoke
 """
 
+import sys
 import uuid
 
 from sqlalchemy import create_engine, select, text
@@ -22,6 +23,7 @@ QUERY = "Što je derivacija?"
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")  # Croatian text on Windows consoles (cp1252)
     owner = create_engine(get_settings().database_owner_url)
     teacher, kb, version = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
     with owner.begin() as c:
