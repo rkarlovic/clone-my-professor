@@ -1,0 +1,62 @@
+# CMP model configuration — the ONLY place model names live (CLAUDE.md rule 8).
+# Code asks for a role; this file says which LiteLLM model string serves it.
+# Switching a model = edit this file, bump `version`, re-run the golden set.
+#
+# `api_base` may reference an environment variable as `os.environ/NAME`.
+#
+# This file is the DEV profile (Ollama, quantized GGUF). Never compare or tune
+# models on Ollama output — model decisions use the vLLM setup only.
+# A pilot profile (vLLM) will live in a separate file selected via CMP_MODELS_CONFIG.
+
+version: "dev-2026-11-09.1"
+
+roles:
+  answer:
+    kind: chat
+    model: ollama_chat/qwen3.5:9b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.2
+
+  fast:  # classification, query rewriting, out-of-scope check
+    kind: chat
+    model: ollama_chat/qwen3.5:4b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  context:  # short chunk context at indexing time
+    kind: chat
+    model: ollama_chat/qwen3.5:4b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  vision:  # image / diagram captions during ingestion
+    kind: chat
+    model: ollama_chat/qwen3-vl:8b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  judge:  # evaluation only; see "Open questions" in CLAUDE.md
+    kind: chat
+    model: ollama_chat/qwen3.5:9b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  embedding:
+    kind: embedding
+    model: ollama/bge-m3:567m
+    api_base: os.environ/OLLAMA_API_BASE
+    dimensions: 1024  # must match chunk.embedding vector(1024)
+
+  reranker:  # served by Infinity (compose profile "rerank")
+    kind: rerank
+    model: infinity/BAAI/bge-reranker-v2-m3
+    api_base: os.environ/INFINITY_API_BASE
+
+# Per-model prompt variants, keyed by LiteLLM model string. Never branch on
+# model names in code; put the variant here instead.
+prompt_overrides: {}

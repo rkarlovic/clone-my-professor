@@ -1,0 +1,22 @@
+# Golden question set for one subject. Copy to eval/sets/<subject_id>.yaml.
+# Holds no personal data. Used for recall@5 (step 1) and grounding/abstention (step 2+).
+subject_id: example-subject
+subject_name: "Primjer predmeta"
+language: hr
+kb_version: null  # filled in by the runner from the ingested version
+
+questions:
+  - id: q001
+    question: "Što je derivacija funkcije?"
+    type: answerable          # answerable | out_of_scope | admin (grades/deadlines/exams -> escalate)
+    expected_sources:         # any of these counts as a hit for recall@k
+      - document: "predavanje-03.pdf"
+        page_or_slide: 12
+    reference_answer: "Derivacija opisuje brzinu promjene funkcije u točki."
+    notes: ""
+
+  - id: q002
+    question: "Kada je rok za predaju zadaće?"
+    type: admin
+    expected_sources: []
+    reference_answer: null    # the clone must abstain and forward to the teacher queue

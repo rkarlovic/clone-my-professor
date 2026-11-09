@@ -148,37 +148,45 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 - Long-running work (ingestion, polling, eval) always runs as a Procrastinate job, never inside a request.
 
 ## Commands
-_Assumes the layout above; update this section whenever the setup changes._
+_Update this section whenever the setup changes._
+
+**Current state (build step 1):** the dev compose file has `postgres` (pgvector, PG 18), `ollama`
+and, under the `rerank` profile, `infinity` (bge-reranker-v2-m3, CPU). The backend runs on the
+host. `api`/`worker`/`frontend`/`langfuse`/`moodle` containers, the prod compose file and the
+Dockerfiles arrive in later build steps.
 ```bash
-# full dev stack in containers (api, worker, frontend, postgres, ollama, langfuse, moodle)
-docker compose -f infra/docker-compose.dev.yml up -d --build
-docker compose -f infra/docker-compose.dev.yml logs -f api worker
+# one-time: create .env (git-ignored) from the template and change the passwords
+cp .env.example .env
 
-# or: only supporting services in containers, backend/frontend run locally (commands below)
-docker compose -f infra/docker-compose.dev.yml up -d postgres ollama langfuse moodle
-
-# production-like stack (vLLM on GPU, proxy with HTTPS)
-docker compose -f infra/docker-compose.prod.yml up -d
+# dev containers (run from the repo root)
+docker compose -f infra/docker-compose.dev.yml --env-file .env up -d
+#   with an NVIDIA GPU for Ollama, add: -f infra/docker-compose.dev.gpu.yml
+#   with the reranker, add:            --profile rerank
+docker compose -f infra/docker-compose.dev.yml --env-file .env exec ollama ollama pull bge-m3:567m
 
 # backend
 cd backend
 uv sync                                  # install dependencies
-uv run alembic upgrade head              # apply migrations
-uv run fastapi dev app/main.py           # API with reload
-uv run procrastinate --app=jobs.app worker   # background worker
-uv run pytest                            # tests
+uv sync --group ingest                   # + Docling (pulls torch; needed for parsing)
+uv run alembic upgrade head              # apply migrations (runs as the owner role)
+uv run python -m scripts.smoke           # embed -> pgvector under RLS -> search
+uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
-
-# evaluation (golden set for one subject)
-uv run python -m eval.run --subject <subject_id>
-
-# frontend
-cd frontend
-npm install
-npm run dev
-npm test
-npm run build
+uv run fastapi dev app/main.py           # API with reload (only /health for now)
 ```
+
+Planned (later build steps):
+```bash
+docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, frontend, langfuse, moodle
+docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
+uv run procrastinate --app=jobs.app worker                         # background worker
+uv run python -m eval.run --subject <subject_id>                   # golden-set evaluation
+cd frontend && npm install && npm run dev                          # npm test / npm run build
+```
+
+Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects
+as the app role (`DATABASE_URL`), which is not owner or superuser, so row-level security applies.
+KB content is read/written only inside `core.db.kb_scope(kb_version_id)`.
 
 ## Open questions
 - Which open model wins the `answer` role (Qwen 3.5 vs Mistral Small 4 vs Gemma 4) — decided by golden-set results on Croatian material.

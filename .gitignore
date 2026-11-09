@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# CMP: course material and spike outputs stay local (may be copyrighted or personal)
+/data/
+/eval/reports/
