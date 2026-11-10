@@ -7,4 +7,5 @@ Build step 1 measures **recall@5**: for each `answerable` question, does any of 
 retrieved chunks match one of `expected_sources` (document + page/slide)?
 
 Course material for the spike goes in `/data/<subject_id>/` at the repo root (git-ignored).
-The eval runner (`uv run python -m eval.run --subject <id>`) is part of the spike itself.
+Run it with `uv run python -m scripts.evaluate --subject <id>` from `backend/`. The full
+answer-level runner (`eval.run`: grounding, abstention) arrives in build step 2.
