@@ -172,6 +172,11 @@ uv sync                                  # install dependencies
 uv sync --group ingest                   # + Docling (pulls torch; needed for parsing)
 uv run alembic upgrade head              # apply migrations (runs as the owner role)
 uv run python -m scripts.smoke           # embed -> pgvector under RLS -> search
+# retrieval spike — material lives in data/<subject>/ (git-ignored)
+uv run python -m scripts.parse  --subject <folder>          # Docling parse only (cached in data/.cache/)
+uv run python -m scripts.ingest --subject <folder>          # new draft kb_version; report in eval/reports/
+#   options: --context (`context` role per chunk) --ocr (scans) --min-tokens N --max-tokens N
+uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
 uv run fastapi dev app/main.py           # API with reload (only /health for now)

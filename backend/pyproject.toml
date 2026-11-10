@@ -25,6 +25,7 @@ dev = [
 # Install with: uv sync --group ingest
 ingest = [
     "docling>=2.15",
+    "pypdfium2>=4.30",  # PDF outline + text layer (already a Docling dependency)
 ]
 
 [tool.uv]

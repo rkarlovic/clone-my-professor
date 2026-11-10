@@ -20,6 +20,7 @@ class RoleConfig(BaseModel):
     api_base: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     dimensions: int | None = None
+    tokenizer: str | None = None  # embedding role: tokenizer used to measure chunk sizes
 
     def resolved_api_base(self) -> str | None:
         if self.api_base and self.api_base.startswith(_ENV_PREFIX):
