@@ -177,6 +177,8 @@ uv run python -m scripts.parse  --subject <folder>          # Docling parse only
 uv run python -m scripts.ingest --subject <folder>          # new draft kb_version; report in eval/reports/
 #   options: --context (`context` role per chunk) --ocr (scans) --min-tokens N --max-tokens N
 uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20
+uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
+#   per difficulty (easy/hard); abstain questions report their top score; --version N, -k, --rerank 20
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
 uv run fastapi dev app/main.py           # API with reload (only /health for now)
@@ -187,7 +189,7 @@ Planned (later build steps):
 docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, frontend, langfuse, moodle
 docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
 uv run procrastinate --app=jobs.app worker                         # background worker
-uv run python -m eval.run --subject <subject_id>                   # golden-set evaluation
+uv run python -m eval.run --subject <subject_id>                   # full golden-set eval (answers, grounding, abstention)
 cd frontend && npm install && npm run dev                          # npm test / npm run build
 ```
 

@@ -7,6 +7,7 @@ from ingestion.chunking import (
     classify,
     clean_text,
     section_name,
+    section_names,
     split_long,
 )
 
@@ -22,10 +23,32 @@ def page(n: int, title: str, body: str, section: str = "01 Java") -> Page:
 BODY = " ".join(["riječ"] * 40)
 
 
-def test_section_name_from_merged_pdf_bookmark() -> None:
-    title = "07_2016 Suvremene tehnike programiranja - Iznimke - (UNIPU, SSovilj).pdf (p.422-480)"
-    assert section_name(title) == "07 Iznimke"
+# Bookmark titles shaped like a real merged lecture PDF, including its inconsistencies:
+# a typo in the institution, a part glued to the author parenthesis, notes/slides twins.
+BOOKMARKS = [
+    "00_2016 Osnove programiranja - Uvodno predavanje - (UNI, Autor).pdf (p.1-17)",
+    "02a_2016 Osnove programiranja - Zasto OOP - (notes) - (UNI, Autor).pdf (p.18-40)",
+    "02a_2016 Osnove programiranja - Zasto OOP - (slides) - (UNI, Autor).pdf (p.41-60)",
+    "04_2016 Osnove programiranja - Nasljedjivanje. Polimorfizam. - (UNNI, Autor).pdf (p.61-80)",
+    "07_2016 Osnove programiranja - Iznimke - (UNI, Autor).pdf (p.81-99)",
+    "11b_2016 Osnove programiranja - DODATAK - Git i GitHub + Projekti (UNI, Autor).pdf (p.100-9)",
+]
+
+
+def test_section_names_from_merged_pdf_bookmarks() -> None:
+    assert section_names(BOOKMARKS) == [
+        "00 Uvodno predavanje",
+        "02a Zasto OOP (notes)",
+        "02a Zasto OOP (slides)",
+        "04 Nasljedjivanje. Polimorfizam.",
+        "07 Iznimke",
+        "11b DODATAK – Git i GitHub + Projekti",
+    ]
+
+
+def test_section_name_without_convention_falls_back_to_cleaned_title() -> None:
     assert section_name("Poglavlje 3.pdf") == "Poglavlje 3"
+    assert section_name("Uvod u Javu") == "Uvod u Javu"
 
 
 def test_base_title_strips_continuation_markers() -> None:

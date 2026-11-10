@@ -3,12 +3,13 @@
 subject_id: example-subject
 subject_name: "Primjer predmeta"
 language: hr
-kb_version: null  # filled in by the runner from the ingested version
+default_document: null  # used when an expected source names no document
 
 questions:
   - id: q001
     question: "Što je derivacija funkcije?"
     type: answerable          # answerable | out_of_scope | admin (grades/deadlines/exams -> escalate)
+    difficulty: easy          # easy (worded like the slide) | hard (paraphrase, symptom, English, ...)
     expected_sources:         # any of these counts as a hit for recall@k
       - document: "predavanje-03.pdf"
         page_or_slide: 12

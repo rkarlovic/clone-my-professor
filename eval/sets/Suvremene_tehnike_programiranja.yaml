@@ -1,0 +1,387 @@
+# Golden question set — Suvremene tehnike programiranja (Java, OOP; slides 2016/17, CC licence)
+#
+# STATUS: DRAFT written by Claude from the slides, NOT yet reviewed by the teacher.
+# Only teacher-reviewed questions should count as the real recall@5 baseline.
+#
+# difficulty:
+#   easy — worded close to the slide; one obvious target slide
+#   hard — paraphrased or colloquial, English terms for Croatian slide wording, no diacritics,
+#          a symptom instead of the concept, answers spread over several slides, or a question
+#          the clone must NOT answer (out_of_scope / admin -> forward to the teacher)
+# type:
+#   answerable   — counts for recall@k: any expected source in the top k is a hit
+#   out_of_scope — not covered by the materials: clone says so and forwards to the teacher
+#   admin        — grades, deadlines, exams: always forwarded to the teacher (rule 2),
+#                  even when a slide mentions it
+# Pages are pages of the PDF (= slide numbers in citations).
+
+subject_id: Suvremene_tehnike_programiranja
+subject_name: "Suvremene tehnike programiranja"
+language: hr
+default_document: "Suvremene_tehnike_programiranja_-_Sve_prezentacije_2016-17_-_UNIPU_SSovilj.pdf"
+
+questions:
+  # ------------------------------------------------------------------ easy (25)
+  - id: e01
+    difficulty: easy
+    type: answerable
+    question: "Mogu li u jednoj klasi imati više konstruktora i vraćaju li oni neku vrijednost?"
+    expected_sources: [{page_or_slide: 190}]
+    reference_answer: "Da, konstruktora može biti više i mogu imati argumente, ali nemaju povratni tip, čak ni void."
+
+  - id: e02
+    difficulty: easy
+    type: answerable
+    question: "Kako uhvatiti nekoliko različitih iznimaka u istom catch bloku?"
+    expected_sources: [{page_or_slide: 435}]
+    reference_answer: "Multi-catch: tipovi iznimaka navode se u jednom catch bloku odvojeni znakom |."
+
+  - id: e03
+    difficulty: easy
+    type: answerable
+    question: "Zašto nije dobro uvesti cijeli paket odjednom?"
+    expected_sources: [{page_or_slide: 330}]
+    reference_answer: "Gubi se pregled koja su imena uvezena pa se može nehotice koristiti kriva klasa."
+
+  - id: e04
+    difficulty: easy
+    type: answerable
+    question: "Kako se u Javi pokreće nova dretva?"
+    expected_sources: [{page_or_slide: 700}]
+    reference_answer: "Napravi se objekt klase koja implementira Runnable ili nasljeđuje Thread i pozove se metoda start."
+
+  - id: e05
+    difficulty: easy
+    type: answerable
+    question: "Moram li implementirati sve metode sučelja FileVisitor?"
+    expected_sources: [{page_or_slide: 500}]
+    reference_answer: "Ne, može se naslijediti SimpleFileVisitor i nadjačati samo potrebne metode."
+
+  - id: e06
+    difficulty: easy
+    type: answerable
+    question: "Što je JUnit?"
+    expected_sources: [{page_or_slide: 880}, {page_or_slide: 881}]
+    reference_answer: "Programski okvir iz obitelji xUnit za testiranje jedinica u Javi."
+
+  - id: e07
+    difficulty: easy
+    type: answerable
+    question: "Treba li uvijek optimizirati kod da bude što brži?"
+    expected_sources: [{page_or_slide: 920}, {page_or_slide: 921}]
+    reference_answer: "Ne; ako su zahtjevi na performanse ispunjeni, ne treba gubiti vrijeme na optimizaciju — ispravnost je važnija."
+
+  - id: e08
+    difficulty: easy
+    type: answerable
+    question: "Što je singleton?"
+    expected_sources: [{page_or_slide: 212}, {page_or_slide: 213}]
+    reference_answer: "Kreacijski oblikovni obrazac koji osigurava da postoji samo jedan objekt klase; ostvaruje se statičkom varijablom i statičkom metodom."
+
+  - id: e09
+    difficulty: easy
+    type: answerable
+    question: "Koja je razlika između apstraktne klase i sučelja?"
+    expected_sources: [{page_or_slide: 313}]
+    reference_answer: "Apstraktna klasa može imati i ne-apstraktne metode, razne atribute i konstruktor; sučelje (u tom pregledu) samo apstraktne metode i static final atribute te podržava višestruko nasljeđivanje."
+
+  - id: e10
+    difficulty: easy
+    type: answerable
+    question: "Koja je razlika između JDK, JRE i JVM?"
+    expected_sources: [{page_or_slide: 31}]
+    reference_answer: "JDK sadrži alate za razvoj (javac, jar, javadoc), JRE pokreće Java aplikacije i uključuje JVM, a JVM je Java virtualni stroj."
+
+  - id: e11
+    difficulty: easy
+    type: answerable
+    question: "Koji modifikatori vidljivosti postoje u Javi?"
+    expected_sources: [{page_or_slide: 172}, {page_or_slide: 175}]
+    reference_answer: "public, protected, private i bez modifikatora (paketna vidljivost)."
+
+  - id: e12
+    difficulty: easy
+    type: answerable
+    question: "Čemu služi ključna riječ final?"
+    expected_sources: [{page_or_slide: 208}, {page_or_slide: 255}]
+    reference_answer: "Varijabla se ne može mijenjati nakon inicijalizacije; final klasa se ne može nasljeđivati, a final metoda nadjačati."
+
+  - id: e13
+    difficulty: easy
+    type: answerable
+    question: "Kojim redoslijedom se pozivaju konstruktori kod nasljeđivanja?"
+    expected_sources: [{page_or_slide: 246}]
+    reference_answer: "Prvo konstruktor bazne klase (prevoditelj dodaje super()), zatim konstruktor izvedene klase."
+
+  - id: e14
+    difficulty: easy
+    type: answerable
+    question: "Kako zabraniti nasljeđivanje klase?"
+    expected_sources: [{page_or_slide: 255}]
+    reference_answer: "Klasu treba označiti s final."
+
+  - id: e15
+    difficulty: easy
+    type: answerable
+    question: "Koja je razlika između preopterećenja i nadjačavanja metoda?"
+    expected_sources: [{page_or_slide: 325}]
+    reference_answer: "Preopterećenje je više metoda istog imena s različitim argumentima unutar klase; nadjačavanje je nova implementacija naslijeđene metode u podklasi."
+
+  - id: e16
+    difficulty: easy
+    type: answerable
+    question: "Što su boxing i unboxing?"
+    expected_sources: [{page_or_slide: 365}, {page_or_slide: 366}]
+    reference_answer: "Boxing je pretvaranje primitivnog tipa u objekt omotača, unboxing obrnuto; prevoditelj to radi automatski."
+
+  - id: e17
+    difficulty: easy
+    type: answerable
+    question: "Čemu služi finally blok?"
+    expected_sources: [{page_or_slide: 438}]
+    reference_answer: "Kod u finally bloku izvodi se uvijek, bez obzira kako je završio try-catch, npr. za zatvaranje resursa."
+
+  - id: e18
+    difficulty: easy
+    type: answerable
+    question: "Što je try with resources?"
+    expected_sources: [{page_or_slide: 455}]
+    reference_answer: "Oblik try bloka (od Jave 7) koji automatski zatvara resurse koji implementiraju AutoCloseable/Closeable."
+
+  - id: e19
+    difficulty: easy
+    type: answerable
+    question: "Koju implementaciju sučelja Set odabrati?"
+    expected_sources: [{page_or_slide: 559}, {page_or_slide: 560}]
+    reference_answer: "Ovisi što algoritam dominantno radi (iteriranje, čitanje/pisanje, poredak); bira se ona koja daje potrebnu funkcionalnost i performanse."
+
+  - id: e20
+    difficulty: easy
+    type: answerable
+    question: "Što je mapa u Javi?"
+    expected_sources: [{page_or_slide: 585}]
+    reference_answer: "Kolekcija parova (ključ, vrijednost) u kojoj se ključevi ne ponavljaju; modelirana sučeljem Map."
+
+  - id: e21
+    difficulty: easy
+    type: answerable
+    question: "Kako radi BorderLayout?"
+    expected_sources: [{page_or_slide: 655}]
+    reference_answer: "Dijeli prostor na pet područja (NORTH, SOUTH, EAST, WEST, CENTER), u svako ide jedna komponenta, a središte se širi najviše."
+
+  - id: e22
+    difficulty: easy
+    type: answerable
+    question: "Čemu služi metoda join kod dretvi?"
+    expected_sources: [{page_or_slide: 714}]
+    reference_answer: "Dretva koja pozove join na drugoj dretvi čeka dok ta dretva ne završi."
+
+  - id: e23
+    difficulty: easy
+    type: answerable
+    question: "Što je kritični odsječak i kako se označava?"
+    expected_sources: [{page_or_slide: 721}]
+    reference_answer: "Kod ili metoda koja iz više dretvi pristupa istom objektu; označava se ključnom riječi synchronized."
+
+  - id: e24
+    difficulty: easy
+    type: answerable
+    question: "Što je imitiranje objekata (mocking) u testiranju?"
+    expected_sources: [{page_or_slide: 910}, {page_or_slide: 911}]
+    reference_answer: "Zamjena ovisnosti imitacijom kako bi se jedinica koda testirala izolirano; na kolegiju se koristi Mockito."
+
+  - id: e25
+    difficulty: easy
+    type: answerable
+    question: "Kako zapakirati Java aplikaciju u JAR datoteku?"
+    expected_sources: [{page_or_slide: 538}]
+    reference_answer: "U IntelliJ IDEA: Project Structure > Artifacts > JAR; pokreće se s java -jar."
+
+  # ------------------------------------------------------------------ hard (25)
+  # symptom instead of concept
+  - id: h01
+    difficulty: hard
+    type: answerable
+    question: "Usporedio sam dva stringa s == i dobio false iako je tekst isti, zašto?"
+    expected_sources: [{page_or_slide: 182}, {page_or_slide: 183}]
+    reference_answer: "== uspoređuje reference, ne sadržaj; stringove treba uspoređivati metodom equals."
+
+  - id: h02
+    difficulty: hard
+    type: answerable
+    question: "Program mi puca kad brišem elemente iz liste unutar for-each petlje. Što radim krivo?"
+    expected_sources: [{page_or_slide: 617}, {page_or_slide: 583}]
+    reference_answer: "Mijenjanje kolekcije tijekom iteriranja baca ConcurrentModificationException (fail-fast iterator); treba brisati preko iter.remove()."
+
+  - id: h03
+    difficulty: hard
+    type: answerable
+    question: "Zašto mi se cijeli prozor aplikacije zamrzne dok traje neki dugi izračun nakon klika na gumb?"
+    expected_sources: [{page_or_slide: 742}, {page_or_slide: 743}, {page_or_slide: 745}, {page_or_slide: 769}]
+    reference_answer: "Dugi posao blokira event dispatch dretvu pa se sučelje ne iscrtava; posao treba prebaciti u pozadinsku dretvu (npr. SwingWorker)."
+
+  - id: h04
+    difficulty: hard
+    type: answerable
+    question: "Kad napravim drugu varijablu od postojećeg objekta i promijenim je, promijeni se i original. Kako to?"
+    expected_sources: [{page_or_slide: 343}, {page_or_slide: 344}, {page_or_slide: 205}]
+    reference_answer: "Varijabla referentne vrste sadrži referencu, pa obje varijable pokazuju na isti objekt; za kopiju treba stvoriti novi objekt."
+
+  - id: h05
+    difficulty: hard
+    type: answerable
+    question: "Dobivam ClassCastException kad objekt iz nadklase pretvaram u podklasu."
+    expected_sources: [{page_or_slide: 357}, {page_or_slide: 358}, {page_or_slide: 450}]
+    reference_answer: "Downcast uspijeva samo ako objekt stvarno jest te podvrste; prije pretvorbe provjeriti s instanceof."
+
+  - id: h06
+    difficulty: hard
+    type: answerable
+    question: "Čitam tekstualnu datoteku i hrvatska slova (č, ć, š) mi se prikazuju kao čudni znakovi."
+    expected_sources: [{page_or_slide: 517}, {page_or_slide: 520}, {page_or_slide: 521}]
+    reference_answer: "Bajtove treba dekodirati ispravnom kodnom stranicom, npr. InputStreamReader s \"UTF-8\"."
+
+  # English wording where the slides are Croatian
+  - id: h07
+    difficulty: hard
+    type: answerable
+    question: "How do I avoid a deadlock between threads?"
+    expected_sources: [{page_or_slide: 726}, {page_or_slide: 725}]
+    reference_answer: "Grupirati resurse u jedan, zauzimati resurse istim redoslijedom i sve osloboditi ako se ne mogu zauzeti, ili provjeravati dostupnost bez blokiranja."
+
+  - id: h08
+    difficulty: hard
+    type: answerable
+    question: "What is the difference between checked and unchecked exceptions?"
+    expected_sources: [{page_or_slide: 450}, {page_or_slide: 451}, {page_or_slide: 452}]
+    reference_answer: "Provjeravane (npr. IOException) moraju se obraditi ili najaviti s throws; neprovjeravane (npr. NullPointerException) ne moraju."
+
+  - id: h09
+    difficulty: hard
+    type: answerable
+    question: "Does Java support multiple inheritance?"
+    expected_sources: [{page_or_slide: 279}, {page_or_slide: 313}]
+    reference_answer: "Ne za klase; klasa može naslijediti samo jednu klasu, ali implementirati više sučelja."
+
+  # no diacritics / casual typing
+  - id: h10
+    difficulty: hard
+    type: answerable
+    question: "sto je polimorfizam i koje vrste postoje"
+    expected_sources: [{page_or_slide: 258}, {page_or_slide: 259}, {page_or_slide: 260}]
+    reference_answer: "Jedno sučelje za entitete različitih tipova; vrste: implicitni, ad-hoc (preopterećenje), parametarski (generici), hijerarhijski (nasljeđivanje)."
+
+  - id: h11
+    difficulty: hard
+    type: answerable
+    question: "jel moze interface imat metodu koja ima tijelo"
+    expected_sources: [{page_or_slide: 286}]
+    reference_answer: "Da, od Jave 8 sučelje može imati podrazumijevanu (default) metodu s implementacijom."
+
+  # "why" questions where the slide is about the concept, not the question words
+  - id: h12
+    difficulty: hard
+    type: answerable
+    question: "Zašto je bolje baciti iznimku nego vratiti -1 kao oznaku da je nešto pošlo po zlu?"
+    expected_sources: [{page_or_slide: 425}, {page_or_slide: 426}, {page_or_slide: 427}]
+    reference_answer: "Povratna vrijednost tada miješa podatak i status, a kod se pretvara u gomilu provjera; iznimka odvaja pogrešku od regularnog rezultata."
+
+  - id: h13
+    difficulty: hard
+    type: answerable
+    question: "Zašto se u Javi tokovi umataju jedan u drugi, npr. BufferedReader oko InputStreamReadera?"
+    expected_sources: [{page_or_slide: 509}, {page_or_slide: 510}, {page_or_slide: 521}]
+    reference_answer: "Tokovi koriste oblikovni obrazac dekorator: svaki omotač dodaje ponašanje (bufferiranje, dekodiranje, kompresiju) i mogu se proizvoljno kombinirati."
+
+  - id: h14
+    difficulty: hard
+    type: answerable
+    question: "Mogu li tijekom izvođenja programa saznati kojim je tipom parametrizirana moja lista?"
+    expected_sources: [{page_or_slide: 378}]
+    reference_answer: "Ne, parametri tipa postoje samo za prevoditelj; u byte-kodu se brišu i zamjenjuju s Object (ili granicom)."
+
+  - id: h15
+    difficulty: hard
+    type: answerable
+    question: "Smijem li u kodu direktno pisati brojeve poput 86400 ili 3.14?"
+    expected_sources: [{page_or_slide: 56}, {page_or_slide: 117}]
+    reference_answer: "Bolje ne: to su magični brojevi; treba ih zamijeniti smisleno imenovanim konstantama (static final)."
+
+  - id: h16
+    difficulty: hard
+    type: answerable
+    question: "Na što pokazuje this unutar lambde, a na što unutar anonimne klase?"
+    expected_sources: [{page_or_slide: 413}, {page_or_slide: 409}]
+    reference_answer: "U lambdi this znači isto što i izvan nje (lambda ne uvodi doseg); u anonimnoj klasi this je primjerak anonimne klase."
+
+  - id: h17
+    difficulty: hard
+    type: answerable
+    question: "Kako je u Swingu odvojen prikaz komponente od njenih podataka?"
+    expected_sources: [{page_or_slide: 788}, {page_or_slide: 789}]
+    reference_answer: "Prema MVC-u: model drži stanje, a izgled i upravljač su spojeni u delegat (izveden iz ComponentUI)."
+
+  - id: h18
+    difficulty: hard
+    type: answerable
+    question: "Kako u gitu raditi na novoj funkcionalnosti, a da ne pokvarim glavnu verziju koda?"
+    expected_sources: [{page_or_slide: 754}, {page_or_slide: 755}]
+    reference_answer: "Napraviti novu granu (git branch / git checkout), raditi u njoj i kasnije je spojiti s master granom (git merge)."
+
+  # answer spread over several slides
+  - id: h19
+    difficulty: hard
+    type: answerable
+    question: "Na koje sve načine mogu pokrenuti dretvu?"
+    expected_sources: [{page_or_slide: 700}, {page_or_slide: 702}, {page_or_slide: 703}, {page_or_slide: 704}, {page_or_slide: 705}]
+    reference_answer: "Nasljeđivanjem klase Thread, implementacijom sučelja Runnable, anonimnom klasom ili lambda izrazom — uvijek pozivom start()."
+    notes: "p.700 added after the first run: it names both Runnable and Thread (answer key was too narrow)."
+
+  # must NOT be answered from the materials -> forward to the teacher
+  - id: h20
+    difficulty: hard
+    type: out_of_scope
+    question: "Kako napraviti REST API u Pythonu s Flaskom?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Drugi jezik i tema; nema u materijalima."
+
+  - id: h21
+    difficulty: hard
+    type: out_of_scope
+    question: "Kako spojiti Java aplikaciju na MySQL bazu preko JDBC-a?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Zvuči kao Java gradivo, ali JDBC se ne obrađuje; SQLException se spominje samo kao primjer iznimke (str. 452)."
+
+  - id: h22
+    difficulty: hard
+    type: out_of_scope
+    question: "Kako se koristi Stream API, npr. lista.stream().filter(...).map(...)?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Zamka: stream() se pojavljuje samo u popisu metoda sučelja Collection (str. 555), a lambda izrazi se obrađuju — sam Stream API ne."
+
+  - id: h23
+    difficulty: hard
+    type: out_of_scope
+    question: "Kako napraviti web aplikaciju u Spring Bootu?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Nije gradivo kolegija."
+
+  - id: h24
+    difficulty: hard
+    type: admin
+    question: "Kada je rok za predaju domaće zadaće 7?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Slajd 480 kaže 'do idućeg predavanja', ali rokovi idu nastavniku (pravilo 2)."
+
+  - id: h25
+    difficulty: hard
+    type: admin
+    question: "Koliko bodova trebam skupiti za četvorku?"
+    expected_sources: []
+    reference_answer: null
+    notes: "Bodovni pragovi su na slajdu 13, ali pitanja o ocjenama idu nastavniku (pravilo 2). Odluka za pregled s nastavnikom."

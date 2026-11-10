@@ -22,7 +22,8 @@ TokenCounter = Callable[[str], int]
 _PRIVATE_USE = re.compile("[-]")  # bullet glyphs from symbol fonts
 _IMAGE_MARKER = re.compile(r"^\s*<!-- image -->\s*$", re.MULTILINE)
 _CONTINUATION = re.compile(r"\s*\((?:\d+|\d+\s*/\s*\d+)\)\s*$")  # "Title (2)", "Title (1/3)"
-_LECTURE_TITLE = re.compile(r"^(?P<num>\d+[a-z]?)_\d{4}\s.*?\s-\s(?P<topic>.+?)\s-\s\(")
+_LECTURE_NUMBER = re.compile(r"^(?P<num>\d+[a-z]?)[_\s]+(?:\d{4}\s+)?(?P<rest>.*)$")
+_TRAILING_PAREN = re.compile(r"\s*-?\s*\([^()]*\)\s*$")
 
 
 @dataclass
@@ -60,17 +61,57 @@ class ChunkSettings:
 # ---------------------------------------------------------------- stage 1: Docling -> pages
 
 
-def section_name(outline_title: str) -> str:
-    """'07_2016 Subject - Iznimke - (UNIPU, X).pdf (p.422-480)' -> '07 Iznimke'."""
-    m = _LECTURE_TITLE.match(outline_title)
-    if m:
-        return f"{m['num']} {m['topic'].strip()}"
-    return re.sub(r"\.pdf.*$", "", outline_title).strip()
+def _title_parts(title: str) -> tuple[str, list[str]]:
+    """'07_2016 Subject - Iznimke - (Inst, Author).pdf (p.1-9)' -> ('07', ['Subject', 'Iznimke'])"""
+    t = re.sub(r"\.(pdf|pptx?|docx?)\b.*$", "", title, flags=re.IGNORECASE).strip()
+    num = ""
+    if m := _LECTURE_NUMBER.match(t):
+        num, t = m["num"], m["rest"]
+    t = _TRAILING_PAREN.sub("", t)  # author/institution, glued on or after " - "
+    parts = [p.strip(" -") for p in re.split(r"\s+-\s+", t)]
+    return num, [p for p in parts if p]
 
 
-def _section_for_page(outline: list[OutlineEntry], page: int) -> str:
-    top = [e for e in outline if e.level == 0 and e.first_page <= page]
-    return section_name(top[-1].title) if top else ""
+def section_names(titles: list[str]) -> list[str]:
+    """Short lecture labels for a set of bookmark titles.
+
+    Bookmark names follow the teacher's own, not always consistent, convention. Instead of
+    one exact pattern: strip extension/page range, the leading 'NN_YYYY' and a trailing
+    '(Institution, Author)', then drop parts that repeat in most titles (the subject name).
+    Markers such as '(notes)' are kept so duplicate lectures stay distinguishable."""
+    split = [_title_parts(t) for t in titles]
+    counts = Counter(p for _, parts in split for p in set(parts))
+    common = {p for p, n in counts.items() if len(titles) >= 3 and n > len(titles) / 2}
+    names = []
+    for num, parts in split:
+        kept = [p for p in parts if p not in common] or parts
+        label = ""
+        for p in kept:  # "(notes)" attaches to the previous part, others join with a dash
+            sep = " " if p.startswith("(") else " – "
+            label = f"{label}{sep}{p}" if label else p
+        names.append(f"{num} {label}".strip())
+    return names
+
+
+def section_name(title: str) -> str:
+    return section_names([title])[0]
+
+
+def section_index(outline: list[OutlineEntry]) -> list[tuple[int, str]]:
+    """(first page, label) for each top-level bookmark, in page order."""
+    top = sorted((e for e in outline if e.level == 0), key=lambda e: e.first_page)
+    return list(
+        zip((e.first_page for e in top), section_names([e.title for e in top]), strict=True)
+    )
+
+
+def _section_for_page(index: list[tuple[int, str]], page: int) -> str:
+    current = ""
+    for first_page, label in index:
+        if first_page > page:
+            break
+        current = label
+    return current
 
 
 def clean_text(text: str) -> str:
@@ -113,6 +154,7 @@ def slides_from_docling(
         if getattr(item, "prov", None):
             by_page.setdefault(item.prov[0].page_no, []).append(item)
 
+    sections = section_index(outline)
     pages: list[Page] = []
     for page_no, items in sorted(by_page.items()):
         title_item = next(
@@ -133,7 +175,7 @@ def slides_from_docling(
                 page=page_no,
                 title=clean_text(title_item.text) if title_item else "",
                 body=clean_text(body),
-                section=_section_for_page(outline, page_no),
+                section=_section_for_page(sections, page_no),
                 images=sum(i.label == DocItemLabel.PICTURE for i in items),
             )
         )

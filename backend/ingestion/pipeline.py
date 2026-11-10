@@ -47,6 +47,9 @@ class IngestReport:
     chunks_embedded: int = 0
     parent_chunks: int = 0
     content_types: dict = field(default_factory=dict)
+    # Every section label with its chunk count: review it after each ingest, labels come from
+    # the teacher's bookmark/file names and a bad one is otherwise only seen in search results.
+    sections: dict = field(default_factory=dict)
     seconds: float = 0.0
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -161,6 +164,8 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
             report.content_types[d.content_type.value] = (
                 report.content_types.get(d.content_type.value, 0) + 1
             )
+            label = f"{path.name} › {d.section or '(no section)'}"
+            report.sections[label] = report.sections.get(label, 0) + 1
 
     report.seconds = round(time.time() - started, 1)
     return report
