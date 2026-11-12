@@ -139,6 +139,63 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 5. Teams connector → Google Classroom connector.
 6. Later: student profile, voice (STT → same RAG → TTS), avatar as a separate A/B experiment.
 
+## Current status
+_Update this section when a build step's state changes._
+
+**Step 1 (retrieval spike): pipeline built and measured; experiments and teacher review pending.**
+
+Done:
+- Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
+  reranker (`rerank` profile; amd64 image only). Migration `0001` with `knowledge_base`,
+  `kb_version`, `document`, `chunk`; FORCE RLS per `kb_version_id`; app role is neither owner nor
+  superuser. Tests (RLS isolation, model config, chunking) pass.
+- Model layer: roles resolved from `config/models.yaml` (dev profile, Ollama). Only `embedding`
+  (BGE-M3) has been used so far; reranker and `context` are wired but not yet evaluated; the chat
+  models are placeholders that fit an 11 GB GPU and have not been pulled.
+- Ingestion: Docling → slide-level chunks → BGE-M3 → pgvector, every run a new draft version with
+  a report in `eval/reports/<subject>/`. Retrieval: dense search filtered by `kb_version_id`,
+  optional rerank.
+- First subject `Suvremene_tehnike_programiranja` (1 PDF, 945 pages → 766 embedded chunks,
+  67 parents); versions v1 and v2, v2 is current.
+- Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
+  the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
+  to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
+  Reference answers are not evaluated yet (step 1 scores sources only).
+- Baseline on v2 (dense only, k=5): recall@5 **1.00 easy / 0.79 hard** (MRR 1.00 / 0.51);
+  misses h03, h11, h13, h14. Abstain questions' top scores (0.47–0.64) overlap the weakest
+  answerable top score (0.50).
+
+Decisions made in step 1:
+- Chunking: one chunk per slide; repeated boilerplate slides dropped (seen ≥ 3×); slides under
+  25 tokens merged into a neighbour, citation goes to the page with the most content;
+  continuation slides grouped under one parent; children over 800 tokens split by paragraph with
+  12 % overlap. Tokens counted with the BGE-M3 tokenizer.
+- Section labels come from the **PDF outline (bookmarks)**, normalised generically
+  (`section_names`: strip extension/page range, leading `NN_YYYY`, trailing parentheses, parts
+  shared by most titles). Never fit label parsing to one teacher's naming convention — that caused
+  the wrong-lecture-label bug in v1.
+- Code blocks take their text from the PDF text layer (pypdfium2), because Docling loses line
+  breaks in code. Pages are built from the Docling document in one pass (per-page Markdown export
+  was far too slow).
+- Docling OCR is off by default (`--ocr` for scans); parse results are cached by file hash in
+  `data/.cache/` (a CPU parse of 945 pages takes ~18 min).
+- `content_type = solution` only for solutions to homework/exercises; solved lecture examples
+  are `example` and stay retrievable. The heuristic is regex-based for the spike.
+- **A retrieval-score threshold alone cannot decide abstention** (scores overlap); step 2 needs
+  an explicit out-of-scope/admin check (`fast` role) in addition to the threshold.
+- A vLLM pilot profile will be a separate models file selected with `CMP_MODELS_CONFIG`; the
+  current `config/models.yaml` is dev-only.
+- Windows dev: use `127.0.0.1`, not `localhost` (IPv6 stall); scripts reconfigure stdout to UTF-8.
+- Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
+
+Next:
+1. Teacher reviews the golden set (questions, expected pages, reference answers).
+2. Retrieval experiments, each measured with `scripts.evaluate`: `--rerank 20`; `--context`
+   ingest; sparse/hybrid (BGE-M3 sparse); chunk size settings. Target the hard misses.
+3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation).
+4. Then step 2: pull the dev chat models, answer generation with citations, abstention
+   (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
+
 ## Conventions
 - Keep the core platform-independent; no LMS-specific code outside `connectors/`.
 - No model-specific code outside `llm/`; no model names outside `config/models.yaml`.
@@ -150,7 +207,7 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 ## Commands
 _Update this section whenever the setup changes._
 
-**Current state (build step 1):** the dev compose file has `postgres` (pgvector, PG 18), `ollama`
+**Current state (build step 1, see "Current status"):** the dev compose file has `postgres` (pgvector, PG 18), `ollama`
 and, under the `rerank` profile, `infinity` (bge-reranker-v2-m3, CPU). The backend runs on the
 host. `api`/`worker`/`frontend`/`langfuse`/`moodle` containers, the prod compose file and the
 Dockerfiles arrive in later build steps.
