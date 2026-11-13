@@ -1,6 +1,7 @@
 # Golden question set — Suvremene tehnike programiranja (Java, OOP; slides 2016/17, CC licence)
 #
 # STATUS: DRAFT written by Claude from the slides, NOT yet reviewed by the teacher.
+# Sources re-checked against the PDF on 2026-11-13 (by Claude, not the teacher): see notes tagged [review 2026-11-13].
 # Only teacher-reviewed questions should count as the real recall@5 baseline.
 #
 # difficulty:
@@ -47,8 +48,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Kako se u Javi pokreće nova dretva?"
-    expected_sources: [{page_or_slide: 700}]
+    expected_sources: [{page_or_slide: 700}, {page_or_slide: 702}, {page_or_slide: 703}, {page_or_slide: 704}, {page_or_slide: 705}]
     reference_answer: "Napravi se objekt klase koja implementira Runnable ili nasljeđuje Thread i pozove se metoda start."
+    notes: "[review 2026-11-13] 702-705 show the concrete ways (Thread subclass, Runnable, anonymous class, lambda)."
 
   - id: e05
     difficulty: easy
@@ -68,8 +70,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Treba li uvijek optimizirati kod da bude što brži?"
-    expected_sources: [{page_or_slide: 920}, {page_or_slide: 921}]
+    expected_sources: [{page_or_slide: 920}, {page_or_slide: 921}, {page_or_slide: 919}, {page_or_slide: 922}]
     reference_answer: "Ne; ako su zahtjevi na performanse ispunjeni, ne treba gubiti vrijeme na optimizaciju — ispravnost je važnija."
+    notes: "[review 2026-11-13] 919 (Knuth/Jackson quotes) and 922 (optimise only bottlenecks) answer it too."
 
   - id: e08
     difficulty: easy
@@ -83,7 +86,8 @@ questions:
     type: answerable
     question: "Koja je razlika između apstraktne klase i sučelja?"
     expected_sources: [{page_or_slide: 313}]
-    reference_answer: "Apstraktna klasa može imati i ne-apstraktne metode, razne atribute i konstruktor; sučelje (u tom pregledu) samo apstraktne metode i static final atribute te podržava višestruko nasljeđivanje."
+    reference_answer: "Apstraktna klasa može imati apstraktne i ne-apstraktne metode, razne atribute, static metode i konstruktor; klasa može naslijediti samo jednu klasu, a implementirati više sučelja. Napomena: tablica na slajdu 313 je zastarjela — od Jave 8 sučelje može imati default i static metode s tijelom (slajdovi 285, 286)."
+    notes: "[review 2026-11-13] Slide 313 contradicts 285/286 (Java 8). Teacher: fix the slide or confirm the intended answer."
 
   - id: e10
     difficulty: easy
@@ -96,8 +100,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Koji modifikatori vidljivosti postoje u Javi?"
-    expected_sources: [{page_or_slide: 172}, {page_or_slide: 175}]
+    expected_sources: [{page_or_slide: 172}, {page_or_slide: 173}, {page_or_slide: 174}, {page_or_slide: 175}]
     reference_answer: "public, protected, private i bez modifikatora (paketna vidljivost)."
+    notes: "[review 2026-11-13] 173 (table of all access levels) and 174 also list them."
 
   - id: e12
     difficulty: easy
@@ -110,8 +115,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Kojim redoslijedom se pozivaju konstruktori kod nasljeđivanja?"
-    expected_sources: [{page_or_slide: 246}]
+    expected_sources: [{page_or_slide: 246}, {page_or_slide: 247}]
     reference_answer: "Prvo konstruktor bazne klase (prevoditelj dodaje super()), zatim konstruktor izvedene klase."
+    notes: "[review 2026-11-13] 247 explains the implicit super() call."
 
   - id: e14
     difficulty: easy
@@ -138,8 +144,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Čemu služi finally blok?"
-    expected_sources: [{page_or_slide: 438}]
+    expected_sources: [{page_or_slide: 438}, {page_or_slide: 439}]
     reference_answer: "Kod u finally bloku izvodi se uvijek, bez obzira kako je završio try-catch, npr. za zatvaranje resursa."
+    notes: "[review 2026-11-13] 439 also states finally always runs."
 
   - id: e18
     difficulty: easy
@@ -152,8 +159,9 @@ questions:
     difficulty: easy
     type: answerable
     question: "Koju implementaciju sučelja Set odabrati?"
-    expected_sources: [{page_or_slide: 559}, {page_or_slide: 560}]
+    expected_sources: [{page_or_slide: 559}, {page_or_slide: 558}, {page_or_slide: 560}]
     reference_answer: "Ovisi što algoritam dominantno radi (iteriranje, čitanje/pisanje, poredak); bira se ona koja daje potrebnu funkcionalnost i performanse."
+    notes: "[review 2026-11-13] 558 gives the concrete HashSet/TreeSet/LinkedHashSet trade-offs; 560 only lists questions."
 
   - id: e20
     difficulty: easy
@@ -217,8 +225,9 @@ questions:
     difficulty: hard
     type: answerable
     question: "Zašto mi se cijeli prozor aplikacije zamrzne dok traje neki dugi izračun nakon klika na gumb?"
-    expected_sources: [{page_or_slide: 742}, {page_or_slide: 743}, {page_or_slide: 745}, {page_or_slide: 769}]
+    expected_sources: [{page_or_slide: 742}, {page_or_slide: 743}, {page_or_slide: 744}, {page_or_slide: 745}, {page_or_slide: 769}, {page_or_slide: 770}, {page_or_slide: 771}]
     reference_answer: "Dugi posao blokira event dispatch dretvu pa se sučelje ne iscrtava; posao treba prebaciti u pozadinsku dretvu (npr. SwingWorker)."
+    notes: "[review 2026-11-13] 744 is the blocking loop itself; 770-771 explain SwingWorker. Likely a genuine retrieval gap: colloquial 'zamrzne' vs slide wording 'blokira ponovno iscrtavanje'."
 
   - id: h04
     difficulty: hard
@@ -231,37 +240,42 @@ questions:
     difficulty: hard
     type: answerable
     question: "Dobivam ClassCastException kad objekt iz nadklase pretvaram u podklasu."
-    expected_sources: [{page_or_slide: 357}, {page_or_slide: 358}, {page_or_slide: 450}]
+    expected_sources: [{page_or_slide: 357}, {page_or_slide: 358}, {page_or_slide: 359}, {page_or_slide: 368}, {page_or_slide: 263}, {page_or_slide: 450}]
     reference_answer: "Downcast uspijeva samo ako objekt stvarno jest te podvrste; prije pretvorbe provjeriti s instanceof."
+    notes: "[review 2026-11-13] Reference answer mentions instanceof, which is on 359 (was missing). 368 and 263 explain ClassCastException directly."
 
   - id: h06
     difficulty: hard
     type: answerable
     question: "Čitam tekstualnu datoteku i hrvatska slova (č, ć, š) mi se prikazuju kao čudni znakovi."
-    expected_sources: [{page_or_slide: 517}, {page_or_slide: 520}, {page_or_slide: 521}]
+    expected_sources: [{page_or_slide: 516}, {page_or_slide: 517}, {page_or_slide: 520}, {page_or_slide: 521}]
     reference_answer: "Bajtove treba dekodirati ispravnom kodnom stranicom, npr. InputStreamReader s \"UTF-8\"."
+    notes: "[review 2026-11-13] 516 explains bytes != characters and code pages."
 
   # English wording where the slides are Croatian
   - id: h07
     difficulty: hard
     type: answerable
     question: "How do I avoid a deadlock between threads?"
-    expected_sources: [{page_or_slide: 726}, {page_or_slide: 725}]
+    expected_sources: [{page_or_slide: 726}, {page_or_slide: 725}, {page_or_slide: 724}]
     reference_answer: "Grupirati resurse u jedan, zauzimati resurse istim redoslijedom i sve osloboditi ako se ne mogu zauzeti, ili provjeravati dostupnost bez blokiranja."
+    notes: "[review 2026-11-13] 724 defines deadlock and uses the English word 'deadlock' — the best lexical match for this English question."
 
   - id: h08
     difficulty: hard
     type: answerable
     question: "What is the difference between checked and unchecked exceptions?"
-    expected_sources: [{page_or_slide: 450}, {page_or_slide: 451}, {page_or_slide: 452}]
+    expected_sources: [{page_or_slide: 449}, {page_or_slide: 450}, {page_or_slide: 451}, {page_or_slide: 452}, {page_or_slide: 454}]
     reference_answer: "Provjeravane (npr. IOException) moraju se obraditi ili najaviti s throws; neprovjeravane (npr. NullPointerException) ne moraju."
+    notes: "[review 2026-11-13] 449 defines both families; 454 shows the throws rule for checked exceptions."
 
   - id: h09
     difficulty: hard
     type: answerable
     question: "Does Java support multiple inheritance?"
-    expected_sources: [{page_or_slide: 279}, {page_or_slide: 313}]
+    expected_sources: [{page_or_slide: 281}, {page_or_slide: 278}, {page_or_slide: 29}, {page_or_slide: 313}]
     reference_answer: "Ne za klase; klasa može naslijediti samo jednu klasu, ali implementirati više sučelja."
+    notes: "[review 2026-11-13] Old sources 279/313 did not state the rule (313 even says 'sučelje podržava višestruko nasljeđivanje'). 281 states it exactly; 278 and 29 too. 313 kept as a partial source; 279 removed (it never states the rule)."
 
   # no diacritics / casual typing
   - id: h10
@@ -275,8 +289,9 @@ questions:
     difficulty: hard
     type: answerable
     question: "jel moze interface imat metodu koja ima tijelo"
-    expected_sources: [{page_or_slide: 286}]
-    reference_answer: "Da, od Jave 8 sučelje može imati podrazumijevanu (default) metodu s implementacijom."
+    expected_sources: [{page_or_slide: 286}, {page_or_slide: 285}]
+    reference_answer: "Da, od Jave 8 sučelje može imati podrazumijevanu (default) metodu s implementacijom, a i statičku metodu s tijelom."
+    notes: "[review 2026-11-13] 285 adds static methods with a body (Java 8). WARNING: slide 313 says interfaces have only abstract methods — if retrieval returns 313 the clone will answer wrongly. Teacher should fix slide 313."
 
   # "why" questions where the slide is about the concept, not the question words
   - id: h12
@@ -290,8 +305,9 @@ questions:
     difficulty: hard
     type: answerable
     question: "Zašto se u Javi tokovi umataju jedan u drugi, npr. BufferedReader oko InputStreamReadera?"
-    expected_sources: [{page_or_slide: 509}, {page_or_slide: 510}, {page_or_slide: 521}]
+    expected_sources: [{page_or_slide: 509}, {page_or_slide: 510}, {page_or_slide: 513}, {page_or_slide: 514}, {page_or_slide: 519}, {page_or_slide: 521}]
     reference_answer: "Tokovi koriste oblikovni obrazac dekorator: svaki omotač dodaje ponašanje (bufferiranje, dekodiranje, kompresiju) i mogu se proizvoljno kombinirati."
+    notes: "[review 2026-11-13] 513 (ready-made decorators, chained), 514 ('Ulančani tokovi') and 519 (BufferedReader is a decorator) answer it directly; the earlier miss was probably a false miss."
 
   - id: h14
     difficulty: hard
@@ -304,8 +320,9 @@ questions:
     difficulty: hard
     type: answerable
     question: "Smijem li u kodu direktno pisati brojeve poput 86400 ili 3.14?"
-    expected_sources: [{page_or_slide: 56}, {page_or_slide: 117}]
+    expected_sources: [{page_or_slide: 56}, {page_or_slide: 84}, {page_or_slide: 85}, {page_or_slide: 116}, {page_or_slide: 117}]
     reference_answer: "Bolje ne: to su magični brojevi; treba ih zamijeniti smisleno imenovanim konstantama (static final)."
+    notes: "[review 2026-11-13] The PDF contains the magic-numbers guideline twice (84-85 and 116-117)."
 
   - id: h16
     difficulty: hard
@@ -360,7 +377,7 @@ questions:
     question: "Kako se koristi Stream API, npr. lista.stream().filter(...).map(...)?"
     expected_sources: []
     reference_answer: null
-    notes: "Zamka: stream() se pojavljuje samo u popisu metoda sučelja Collection (str. 555), a lambda izrazi se obrađuju — sam Stream API ne."
+    notes: "Zamka: stream() se pojavljuje samo u popisu metoda sučelja Collection (str. 555), a lambda izrazi se obrađuju — sam Stream API ne. [review 2026-11-13] Also: slide 523 mentions the Stream API (stream()) in a ZIP example, so retrieval will likely return it; still out of scope."
 
   - id: h23
     difficulty: hard
@@ -368,7 +385,7 @@ questions:
     question: "Kako napraviti web aplikaciju u Spring Bootu?"
     expected_sources: []
     reference_answer: null
-    notes: "Nije gradivo kolegija."
+    notes: "Nije gradivo kolegija. [review 2026-11-13] Lexical trap: SpringLayout (slide 662) matches 'Spring'."
 
   - id: h24
     difficulty: hard
@@ -376,7 +393,7 @@ questions:
     question: "Kada je rok za predaju domaće zadaće 7?"
     expected_sources: []
     reference_answer: null
-    notes: "Slajd 480 kaže 'do idućeg predavanja', ali rokovi idu nastavniku (pravilo 2)."
+    notes: "Slajd 480 kaže 'do idućeg predavanja', ali rokovi idu nastavniku (pravilo 2). [review 2026-11-13] Teacher decision: forward (rule 2) or answer from slide 480 with a citation?"
 
   - id: h25
     difficulty: hard
