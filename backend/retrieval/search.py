@@ -1,7 +1,7 @@
 """Dense search inside one kb_version (RLS-enforced), optional rerank, parent expansion."""
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import aliased
@@ -21,10 +21,19 @@ class Hit:
     file_name: str
     page: int | None
     content_type: str
+    also_on: list[int] = field(default_factory=list)  # same content on these pages too
+
+    @property
+    def pages(self) -> list[int]:
+        """Every page this content is on; the first is where it is cited."""
+        return ([self.page] if self.page else []) + self.also_on
 
     @property
     def citation(self) -> str:
-        return f"{self.file_name}, str. {self.page}" if self.page else self.file_name
+        if not self.page:
+            return self.file_name
+        also = f" (isto i na str. {', '.join(map(str, self.also_on))})" if self.also_on else ""
+        return f"{self.file_name}, str. {self.page}{also}"
 
 
 def search(
@@ -65,6 +74,7 @@ def search(
                 file_name=file_name,
                 page=c.page_or_slide,
                 content_type=c.content_type.value,
+                also_on=list(c.also_on_pages or []),
             )
             for c, file_name, parent_text, dist in s.execute(stmt).all()
         ]

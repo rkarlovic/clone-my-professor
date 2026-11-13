@@ -148,28 +148,47 @@ Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
   reranker (`rerank` profile; amd64 image only). Migration `0001` with `knowledge_base`,
   `kb_version`, `document`, `chunk`; FORCE RLS per `kb_version_id`; app role is neither owner nor
-  superuser. Tests (RLS isolation, model config, chunking) pass.
+  superuser. Migration `0002` adds `chunk.also_on_pages`. Tests (RLS isolation, model config,
+  chunking, citations) pass.
 - Model layer: roles resolved from `config/models.yaml` (dev profile, Ollama). Only `embedding`
   (BGE-M3) has been used so far; reranker and `context` are wired but not yet evaluated; the chat
   models are placeholders that fit an 11 GB GPU and have not been pulled.
 - Ingestion: Docling → slide-level chunks → BGE-M3 → pgvector, every run a new draft version with
   a report in `eval/reports/<subject>/`. Retrieval: dense search filtered by `kb_version_id`,
   optional rerank.
-- First subject `Suvremene_tehnike_programiranja` (1 PDF, 945 pages → 766 embedded chunks,
-  67 parents); versions v1 and v2, v2 is current.
+- First subject `Suvremene_tehnike_programiranja` (1 PDF, 945 pages). Local DB (rebuilt on a new
+  machine 2026-11-12, older versions are gone): v1 = 766 embedded chunks without duplicate
+  folding; **v2 = current**, 758 embedded chunks, 67 parents, 8 duplicate pages folded.
 - Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
   the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
   to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
+  Sources re-checked against the PDF on 2026-11-13 (also by Claude): many questions gained
+  slides that also answer them, h09's sources were replaced; notes tagged `[review 2026-11-13]`
+  list open questions for the teacher (outdated slides 313 and 365; h24/h25 forward or answer).
   Reference answers are not evaluated yet (step 1 scores sources only).
-- Baseline on v2 (dense only, k=5): recall@5 **1.00 easy / 0.79 hard** (MRR 1.00 / 0.51);
-  misses h03, h11, h13, h14. Abstain questions' top scores (0.47–0.64) overlap the weakest
-  answerable top score (0.50).
+- Baseline on v2 (dense only, k=5): recall@5 **1.00 easy / 0.84 hard** (MRR 1.00 / 0.60);
+  real misses h03, h09, h14 (h11, h13 were false misses of the old answer key). Abstain
+  questions' top scores (0.47–0.64) overlap the weakest answerable top score (0.50).
+- Duplicate folding (v2) left the scores unchanged: in v1 only e16 had two copies of one slide
+  in its top 5, and it was already a hit. It frees top-5 slots and makes citations complete.
 
 Decisions made in step 1:
 - Chunking: one chunk per slide; repeated boilerplate slides dropped (seen ≥ 3×); slides under
   25 tokens merged into a neighbour, citation goes to the page with the most content;
   continuation slides grouped under one parent; children over 800 tokens split by paragraph with
   12 % overlap. Tokens counted with the BGE-M3 tokenizer.
+- **Duplicate pages are folded, not dropped** (`fold_duplicates`): a page that repeats an
+  earlier one (a lecture included twice, a slide reused in a later lecture) is indexed once under
+  its first occurrence; the other pages go to `chunk.also_on_pages`, citations name all of them
+  and `scripts.evaluate` counts a hit on any copy. Match = same words ignoring order and
+  diacritics (word-set overlap ≥ 0.85), **identical numbers**, similar title (compared only if
+  both copies have one). Numbers are what separate look-alikes that are different content:
+  lecture title slides ("10." vs "12."), build-up slides "(2)"/"(3)", homework 7 vs 10. 0.85
+  tolerates an OCR slip; 0.8 already merged two lectures' title slides, and a real edit
+  (310/334, `private` vs package access, 0.82) must stay apart. The ingest report lists every
+  fold under `duplicates`.
+- The "(notes)" copy of lecture 02a (pages 77–94) is mostly scanned images: with OCR off Docling
+  gets no text (or OCR noise from the PDF layer), so it is not double-indexed.
 - Section labels come from the **PDF outline (bookmarks)**, normalised generically
   (`section_names`: strip extension/page range, leading `NN_YYYY`, trailing parentheses, parts
   shared by most titles). Never fit label parsing to one teacher's naming convention — that caused
@@ -186,12 +205,17 @@ Decisions made in step 1:
 - A vLLM pilot profile will be a separate models file selected with `CMP_MODELS_CONFIG`; the
   current `config/models.yaml` is dev-only.
 - Windows dev: use `127.0.0.1`, not `localhost` (IPv6 stall); scripts reconfigure stdout to UTF-8.
+  A fresh machine needs WSL2 with the "Virtual Machine Platform" feature for Docker Desktop, and a
+  current Visual C++ runtime (`winget upgrade Microsoft.VCRedist.2015+.x64`): an old one (14.30)
+  makes `import torch` fail with WinError 126 on `shm.dll`.
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
 Next:
-1. Teacher reviews the golden set (questions, expected pages, reference answers).
-2. Retrieval experiments, each measured with `scripts.evaluate`: `--rerank 20`; `--context`
-   ingest; sparse/hybrid (BGE-M3 sparse); chunk size settings. Target the hard misses.
+1. Teacher reviews the golden set: `expected_sources` first, then reference answers, the
+   `[review 2026-11-13]` notes and the h24/h25 decision.
+2. Retrieval experiments, each measured with `scripts.evaluate`: `--rerank 20` (cheapest; h09's
+   slide 281 is probably just outside the top 5); sparse/hybrid (BGE-M3 sparse; h03 is a wording
+   gap); `--context` ingest (slow on CPU); chunk size settings. Target the hard misses.
 3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation).
 4. Then step 2: pull the dev chat models, answer generation with citations, abstention
    (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
@@ -233,6 +257,7 @@ uv run python -m scripts.smoke           # embed -> pgvector under RLS -> search
 uv run python -m scripts.parse  --subject <folder>          # Docling parse only (cached in data/.cache/)
 uv run python -m scripts.ingest --subject <folder>          # new draft kb_version; report in eval/reports/
 #   options: --context (`context` role per chunk) --ocr (scans) --min-tokens N --max-tokens N
+#            --duplicate-similarity F (default 0.85) | --keep-duplicates (no folding)
 uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score; --version N, -k, --rerank 20

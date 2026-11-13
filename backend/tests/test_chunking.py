@@ -124,6 +124,78 @@ def test_split_long_respects_limit_overlaps_and_keeps_code_whole() -> None:
     assert pieces[1].startswith(pieces[0].split("\n\n")[-1])  # overlap carries the tail
 
 
+COHESION = (
+    "- Koliko usko su operacije unutar postupka povezane\n"
+    "- Vrlo važna kada razmatramo KAKO napraviti postupak\n"
+    "- Funkcija Cosine() ima dobru koheziju jer je cijeli postupak posvećen jednom zadatku\n"
+    "- Funkcija CosineAndTan() ima lošiju koheziju jer pokušava raditi više od jednog zadatka"
+)
+# The same slide in a lecture's "notes" copy: items reordered, typed without diacritics.
+COHESION_NOTES = (
+    "- Vrlo vazna kada razmatramo KAKO napraviti postupak\n"
+    "- Koliko usko su operacije unutar postupka povezane\n"
+    "- Funkcija Cosine () ima dobru koheziju jer je cijeli postupak posvecen jednom zadatku\n"
+    "- Funkcija CosineAndTan () ima losiju koheziju jer pokusava raditi vise od jednog zadatka"
+)
+
+
+def test_duplicate_pages_fold_into_the_first_and_remember_where_they_repeat() -> None:
+    pages = [
+        page(87, "Smjernica #6: Kohezija", COHESION_NOTES, "02a OOP (notes)"),
+        page(100, "Klase", BODY),
+        page(119, "Smjernica #6: Kohezija", COHESION, "02a OOP (slides)"),
+        page(303, "Smjernica #6: Kohezija", COHESION, "05 Sučelja"),
+    ]
+    chunks = build_chunks(pages, "STP", words)
+    assert [(c.page, c.also_on_pages) for c in chunks] == [(87, [119, 303]), (100, [])]
+
+
+def test_pages_that_differ_in_numbers_are_not_duplicates() -> None:
+    # Title slides of two lectures, build-up slides of one example, two homeworks: same title,
+    # nearly the same words, but different content.
+    lecture = (
+        "Sveučilište u Puli, diplomski studij, {n}. Grafičko sučelje Swing, ak. g. 2016./2017."
+    )
+    pages = [
+        page(623, "Suvremene tehnike programiranja", lecture.format(n=10)),
+        page(766, "Suvremene tehnike programiranja", lecture.format(n=12)),
+        page(148, "Primjer 1.4: Spajanje stringova (2)", BODY),
+        page(149, "Primjer 1.4: Spajanje stringova (3)", BODY),
+        page(480, "Domaća zadaća 7", COHESION, "07 Iznimke"),
+        page(693, "Domaća zadaća 10", COHESION, "10 Swing"),
+    ]
+    chunks = build_chunks(pages, "STP", words, ChunkSettings(min_tokens=1))
+    assert all(c.also_on_pages == [] for c in chunks)
+    assert {c.page for c in chunks if c.embed} == {623, 766, 148, 149, 480, 693}
+
+
+def test_a_real_edit_is_not_folded_but_an_ocr_slip_or_missing_title_is() -> None:
+    code = (
+        "Primjer apstraktne klase: atribut {} String name, metoda getName vraća ime, set postavlja"
+    )
+    ocr_slip = COHESION.replace("posvećen", "pornocen")
+    pages = [
+        page(310, "Primjer 5.3", code.format("private")),
+        page(334, "Primjer 5.3", code.format("paketno vidljiv")),  # what the example teaches
+        page(86, "Smjernica #6: Kohezija", COHESION),
+        page(118, "", COHESION),  # the parser found no title on this copy
+        page(94, "Modeliranje", COHESION + " modeliranje"),
+        page(126, "Modeliranje", ocr_slip + " modeliranje"),
+    ]
+    chunks = build_chunks(pages, "STP", words, ChunkSettings(min_tokens=1))
+    folded = {c.page: c.also_on_pages for c in chunks if c.embed}
+    assert folded == {310: [], 334: [], 86: [118], 94: [126]}
+
+
+def test_duplicate_folding_can_be_switched_off_and_leaves_input_pages_unchanged() -> None:
+    pages = [page(1, "Kohezija", COHESION), page(2, "Kohezija", COHESION)]
+    off = build_chunks(pages, "STP", words, ChunkSettings(duplicate_similarity=None))
+    assert [c.page for c in off if c.embed] == [1, 2]
+    build_chunks(pages, "STP", words)
+    (chunk,) = build_chunks(pages, "STP", words)  # a second run does not pile up pages
+    assert chunk.also_on_pages == [2] and pages[0].also_on == []
+
+
 def test_settings_are_respected() -> None:
     chunks = build_chunks(
         [page(1, "A", "kratko"), page(2, "B", BODY)], "S", words, ChunkSettings(min_tokens=1)

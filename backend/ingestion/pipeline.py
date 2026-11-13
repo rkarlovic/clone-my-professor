@@ -50,6 +50,9 @@ class IngestReport:
     # Every section label with its chunk count: review it after each ingest, labels come from
     # the teacher's bookmark/file names and a bad one is otherwise only seen in search results.
     sections: dict = field(default_factory=dict)
+    # Folded duplicate pages, "<file> p.<n>" -> the page they are indexed under. Review it
+    # too: a wrong fold hides a slide's own content behind another slide's citation.
+    duplicates: dict = field(default_factory=dict)
     seconds: float = 0.0
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
@@ -150,6 +153,7 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
                             heading_path=d.heading_path,
                             content_type=d.content_type,
                             page_or_slide=d.page,
+                            also_on_pages=d.also_on_pages,
                             week_topic=d.section or None,
                             embedding=vectors.get(d.key),
                         )
@@ -166,6 +170,8 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
             )
             label = f"{path.name} › {d.section or '(no section)'}"
             report.sections[label] = report.sections.get(label, 0) + 1
+            for dup in d.also_on_pages:
+                report.duplicates[f"{path.name} p.{dup}"] = d.page
 
     report.seconds = round(time.time() - started, 1)
     return report

@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import SPARSEVEC, Vector
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 EMBEDDING_DIM = 1024  # BGE-M3 dense
@@ -91,6 +91,10 @@ class Chunk(Base):
         Enum(ContentType, name="content_type"), default=ContentType.other
     )
     page_or_slide: Mapped[int | None] = mapped_column(Integer)
+    # Other pages with the same content (duplicates folded at ingestion): cite them too.
+    also_on_pages: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), default=list, server_default="{}"
+    )
     week_topic: Mapped[str | None] = mapped_column(String(200))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     sparse_embedding = mapped_column(SPARSEVEC(SPARSE_DIM), nullable=True)

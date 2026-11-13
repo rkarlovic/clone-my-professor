@@ -43,13 +43,13 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Dev infrastructure | Docker Compose: Postgres 18 + pgvector, Ollama (optional NVIDIA GPU), Infinity reranker (optional profile) |
 | Database | Alembic migration for knowledge bases, versions, documents and chunks; row-level security per `kb_version` with a non-owner app role |
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
-| Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
+| Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline |
-| Tests | pytest: RLS isolation, model config, chunking |
+| Tests | pytest: RLS isolation, model config, chunking, citations |
 
 **First results** (subject *Suvremene tehnike programiranja*, 945 pages, 50 draft golden questions):
-recall@5 is **1.00** on easy questions and **0.79** on hard ones. Questions the clone should decline
+recall@5 is **1.00** on easy questions and **0.84** on hard ones. Questions the clone should decline
 score in the same range as weak answerable ones, so a score threshold alone won't be enough for
 abstention — step 2 needs an explicit out-of-scope check.
 
@@ -77,9 +77,12 @@ frontend (later). See [CLAUDE.md](CLAUDE.md) for the reasoning behind each choic
 
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (on Windows, hardware
-  virtualization must be enabled in the BIOS)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/). On Windows it needs WSL2:
+  hardware virtualization enabled in the BIOS and the "Virtual Machine Platform" Windows feature
+  (`wsl.exe --install --no-distribution` in an admin shell, then restart).
 - [uv](https://docs.astral.sh/uv/) for Python (it installs Python 3.12 itself)
+- Windows: a current Visual C++ runtime (`winget upgrade Microsoft.VCRedist.2015+.x64`). With an
+  old one, `import torch` fails with `WinError 126` on `shm.dll` and ingestion stops.
 - Optional: an NVIDIA GPU with the NVIDIA Container Toolkit for faster Ollama
 
 ### Setup
@@ -121,7 +124,9 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    uv run python -m scripts.ingest --subject <subject>
    ```
    Options: `--context` (adds a short context per chunk with the `context` model), `--ocr` (for
-   scans), `--min-tokens N`, `--max-tokens N`.
+   scans), `--min-tokens N`, `--max-tokens N`, `--duplicate-similarity F` (default 0.85) or
+   `--keep-duplicates`. Repeated slides are indexed once; the report's `duplicates` lists each
+   folded page and the page it is indexed under.
 3. Try a question and see the top 5 hits:
    ```bash
    uv run python -m scripts.ask --subject <subject> "Što je rekurzija?"

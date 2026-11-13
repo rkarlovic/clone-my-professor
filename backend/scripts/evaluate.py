@@ -76,7 +76,16 @@ def main() -> None:
     for q in golden.questions:
         hits = search(version.id, q.question, args.k, rerank_candidates=args.rerank)
         expected = {(src.document, src.page_or_slide) for src in q.expected_sources}
-        rank = next((i for i, h in enumerate(hits, 1) if (h.file_name, h.page) in expected), None)
+        # A folded duplicate counts on every page it is on: whichever copy the golden set
+        # names, the indexed chunk is the same content.
+        rank = next(
+            (
+                i
+                for i, h in enumerate(hits, 1)
+                if any((h.file_name, p) in expected for p in h.pages)
+            ),
+            None,
+        )
         results.append(
             {
                 "id": q.id,
@@ -87,7 +96,12 @@ def main() -> None:
                 "rank": rank,
                 "top_score": round(hits[0].score, 4) if hits else None,
                 "top": [
-                    {"page": h.page, "score": round(h.score, 4), "heading": h.heading_path}
+                    {
+                        "page": h.page,
+                        "also_on": h.also_on,
+                        "score": round(h.score, 4),
+                        "heading": h.heading_path,
+                    }
                     for h in hits
                 ],
             }
