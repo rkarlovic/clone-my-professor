@@ -222,3 +222,6 @@ __marimo__/
 # CMP: course material and spike outputs stay local (may be copyrighted or personal)
 /data/
 /eval/reports/
+
+# Local test sets made from someone else's material (e.g. a teacher's exam questions): never committed
+/eval/sets/local/

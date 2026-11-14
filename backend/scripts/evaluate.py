@@ -1,10 +1,14 @@
 """Retrieval evaluation on a subject's golden set (eval/sets/<subject>.yaml).
 
     uv run python -m scripts.evaluate --subject <id> [--version N] [-k 5] [--rerank 20] [--hybrid]
+                                      [--set PATH]
 
-answerable questions -> recall@k (any expected source in the top k) and MRR, per difficulty.
+answerable questions -> recall@k (any expected source in the top k) and MRR, per difficulty
+(easy / hard: student-style questions; exam: written by the teacher as exam practice).
 out_of_scope / admin -> best retrieval score, to calibrate the abstention threshold (step 2).
-Report: eval/reports/<subject>/eval-v<N>[-hybrid][-rerankM]-k<K>-<timestamp>.json
+--set: another set file for the same subject (default eval/sets/<subject>.yaml), e.g. a local,
+git-ignored one in eval/sets/local/ made from a teacher's own questions.
+Report: eval/reports/<subject>/eval-v<N>[-<set>][-hybrid][-rerankM]-k<K>-<timestamp>.json
 """
 
 import argparse
@@ -13,6 +17,7 @@ import sys
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 import yaml
@@ -35,7 +40,7 @@ class Question(BaseModel):
     id: str
     question: str
     type: Literal["answerable", "out_of_scope", "admin"]
-    difficulty: Literal["easy", "hard"] = "easy"
+    difficulty: Literal["easy", "hard", "exam"] = "easy"
     expected_sources: list[Source] = []
     reference_answer: str | None = None
     notes: str = ""
@@ -67,10 +72,14 @@ def main() -> None:
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--rerank", type=int, metavar="N")
     ap.add_argument("--hybrid", action="store_true", help="dense + sparse, rank-fused")
+    ap.add_argument("--set", type=Path, help="set file (default eval/sets/<subject>.yaml)")
     args = ap.parse_args()
 
-    path = REPO_ROOT / "eval" / "sets" / f"{args.subject}.yaml"
+    default_path = REPO_ROOT / "eval" / "sets" / f"{args.subject}.yaml"
+    path = (args.set or default_path).resolve()
     golden = GoldenSet.model_validate(yaml.safe_load(path.read_text(encoding="utf-8")))
+    if golden.subject_id != args.subject:
+        raise SystemExit(f"{path.name} is for subject {golden.subject_id}, not {args.subject}")
     with Session(app_engine()) as s:
         version = find_version(s, args.subject, args.version)
 
@@ -142,14 +151,23 @@ def main() -> None:
         "models": {"embedding": trace_metadata("embedding")}
         | ({"reranker": trace_metadata("reranker")} if args.rerank else {})
         | ({"sparse": trace_metadata("sparse")} if args.hybrid else {}),
-        "golden_set": str(path.relative_to(REPO_ROOT)),
+        "golden_set": str(path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path),
         "summary": summary,
         "seconds": round(time.time() - started, 1),
         "results": results,
         "created_at": datetime.now(UTC).isoformat(),
     }
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    mode = ("-hybrid" if args.hybrid else "") + (f"-rerank{args.rerank}" if args.rerank else "")
+    set_tag = (
+        ""
+        if path == default_path.resolve()
+        else "-" + path.stem.removeprefix(args.subject).strip("._-")
+    )
+    mode = (
+        set_tag
+        + ("-hybrid" if args.hybrid else "")
+        + (f"-rerank{args.rerank}" if args.rerank else "")
+    )
     name = f"eval-v{version.version}{mode}-k{args.k}-{stamp}.json"
     out = REPO_ROOT / "eval" / "reports" / args.subject / name
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -158,7 +176,7 @@ def main() -> None:
     print(
         f"{args.subject} v{version.version}, k={args.k}, rerank={args.rerank}, hybrid={args.hybrid}"
     )
-    for name in ("easy", "hard", "all"):
+    for name in ("easy", "hard", "exam", "all"):
         if name in summary:
             print(f"  {name:5} {summary[name]}")
     print("  misses:")

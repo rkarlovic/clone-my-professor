@@ -139,7 +139,9 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    ```bash
    uv run python -m scripts.evaluate --subject <subject>
    ```
-   `ask` and `evaluate` also take `--version N`, `--rerank 20` and `--hybrid`. Hybrid needs
+   `ask` and `evaluate` also take `--version N`, `--rerank 20` and `--hybrid`; `evaluate` takes
+   `--set PATH` for another question set of the same subject. Sets made from someone else's text
+   (e.g. a teacher's own exam questions) go in `eval/sets/local/`, which is git-ignored. Hybrid needs
    sparse vectors first: `uv run python -m scripts.sparse --subject <subject>` (experiment).
    Ingest reports record time per step; eval reports record their runtime.
 

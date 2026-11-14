@@ -125,7 +125,9 @@ backend/
   migrations/     Alembic
   tests/
 frontend/         React + Vite + TS
-eval/             internal benchmark sets (eval/sets/<subject>.yaml), eval runner, reports (git-ignored)
+eval/             internal benchmark sets (eval/sets/<subject>.yaml; sets made from someone else's
+                  text, e.g. a teacher's own questions, in eval/sets/local/, git-ignored),
+                  eval runner, reports (git-ignored)
 config/           models.yaml, settings
 infra/            docker-compose.dev.yml, docker-compose.prod.yml, proxy config
 backend/Dockerfile, frontend/Dockerfile   (multi-stage, pinned base images)
@@ -379,7 +381,8 @@ uv run python -m scripts.sparse --subject <folder>         # experiment: BGE-M3 
 uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20, --hybrid
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
-#   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first)
+#   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),
+#   --set PATH (another set for the subject, e.g. eval/sets/local/<subject>.teacher.yaml)
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
 uv run fastapi dev app/main.py           # API with reload (only /health for now)
