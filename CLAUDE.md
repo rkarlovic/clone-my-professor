@@ -354,7 +354,7 @@ Decisions made in step 1:
   makes `import torch` fail with WinError 126 on `shm.dll`.
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
-**Step 2 (answers), part A: pipeline built and first evaluated 2026-11-14; prompt fixes next.**
+**Step 2 (answers), part A: pipeline built, evaluated twice 2026-11-14; more prompt work next.**
 - `core/answer.py` `answer_question`: scope check (`fast`: GRADIVO / ADMIN / DRUGO, given the
   subject name and lecture labels) → retrieval (same modes as step 1) → score floor → `answer`
   role with numbered sources `[1]…[n]` → citation check. Forwarded with a reason
@@ -411,6 +411,41 @@ Decisions made in step 1:
   - **The dev judge is noisy both ways**: it passed h09's contradictory answer in the 6-question
     run, failed h02 although slide 617 says exactly what the answer says, and gave no verdict on
     h11. Treat judge numbers as rough until a person checks a sample of verdicts.
+- **Prompt fixes, second run (2026-11-14)**, same setup (answer prompt `faff44ecb943`, scope
+  prompt `fcaaa349520c`), 50 questions in **4,892 s (82 min)**, no errors:
+  - Scope prompt now lists the lectures as a bullet list, says that course terms which sound like
+    teaching organisation (software testing, exceptions) are GRADIVO, ADMIN = grades/points,
+    deadlines, exam dates, enrolment, attendance, DRUGO = other subjects/languages and
+    technologies not among the topics (web frameworks, databases); unsure between GRADIVO and
+    DRUGO → GRADIVO. The 4B and the 9B gave the same labels on test questions, so the model size
+    was not the problem.
+  - **`ADMIN_TERMS` keyword net** in `core/answer.py` (ocjen-, bodov-, kolokvij-, dvojk-/…/petic-,
+    "rok… za", rokovi, ispitni rok, datum ispita) forwards as `admin` without a model call: every
+    prompt wording still labelled "Koliko bodova trebam skupiti za četvorku?" GRADIVO. It matches
+    only h24/h25 among all 110 questions (golden + teacher sets). Croatian only; another language
+    adds its own terms.
+  - Answer prompt: the sources are excerpts from the teacher's materials that the student did
+    not write and cannot see; no methods/classes/code/versions/terms not in the sources;
+    `NE_ZNAM` also when a source only mentions a topic in passing; a partially covered question
+    is answered in part with a note that the rest is not covered; names exactly as in the sources.
+
+  | group | answered | cites expected slide | expected slide retrieved | judge: grounded | judge: on topic |
+  |-------|----------|----------------------|--------------------------|-----------------|-----------------|
+  | easy (25) | **1.00** | **1.00** | 1.00 | **0.96** | 1.00 |
+  | hard (19) | 0.95 | 0.84 | 0.89 | 0.61 | 0.94 |
+
+  Abstain (6): 5 forwarded, now with the right reason: h20 (Flask), h23 `out_of_scope` by the
+  scope check (12 s instead of ~60 s), h24/h25 `admin` by `ADMIN_TERMS` (0 s); h21 (JDBC) still
+  labelled GRADIVO and forwarded `no_source`. **h22 still counts as answered**, but no longer adds
+  outside knowledge: it says the sources only mention `stream()` and do not cover `filter`/`map`.
+  - e24 (mocking) fixed: GRADIVO, answered from 910/911. Hard numbers unchanged.
+  - **New problem: refusals written as prose.** Rule 4 (answer the covered part) makes the 9B
+    write "materijali ne pokrivaju…" with a citation instead of `NE_ZNAM`, so the citation check
+    lets it through: h22, h11 (starts "Da, sučelje može imati metodu s tijelom", then says the
+    sources say the opposite and quotes "prema pravilu 1 i 3"), h17 (starts "U izvorima … ne
+    nalazi se", then answers in part). Next: a forward when the answer is mostly a refusal
+    (a check or a stricter rule 4), and never mention the rules to the student.
+  - "materijali koje ste naveli" no longer appears.
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode. Expect ~80 min for 50 questions dense with `--judge`, ~1 h 35 min for the
@@ -423,9 +458,8 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A: prompt fixes (scope check: software testing is GRADIVO, ADMIN only for the
-   student's own grades/exams/deadlines; answer prompt: sources are the teacher's materials, say
-   only what they say) and re-run; a grounding check against outside knowledge (h22, h11);
+3. Step 2 part A (first prompt fixes done, see above): prose refusals and rule mentions (h22,
+   h11, h17); JDBC/databases still GRADIVO (h21); a grounding check against outside knowledge;
    a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set

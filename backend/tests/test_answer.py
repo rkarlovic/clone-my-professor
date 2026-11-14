@@ -95,3 +95,33 @@ def test_answer_prompt_formats() -> None:
     assert "Predmet" in system and DONT_KNOW in system
     PROMPTS["answer_user"].format(sources="[1] x", question="q")
     PROMPTS["scope_check"].format(subject="s", topics="t", question="q")
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Koliko bodova trebam skupiti za četvorku?",
+        "Kada je rok za predaju domaće zadaće 7?",
+        "Kad je kolokvij?",
+        "Kako se računa ocjena?",
+    ],
+)
+def test_admin_terms_forward_without_the_model(monkeypatch: pytest.MonkeyPatch, question) -> None:
+    def no_model(role, messages):
+        raise AssertionError("the model must not be asked")
+
+    monkeypatch.setattr(answer, "complete", no_model)
+    assert scope_check("Predmet", ["Tema"], question) == ("ADMIN_TERM", ForwardReason.admin)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Što je imitiranje objekata (mocking) u testiranju?",
+        "Kako upisati tekst u datoteku?",
+        "Što se dogodi ako test ne prođe u JUnitu?",
+        "Kako proći kroz listu iteratorom?",
+    ],
+)
+def test_programming_words_are_not_admin_terms(question) -> None:
+    assert not answer.ADMIN_TERMS.search(question)

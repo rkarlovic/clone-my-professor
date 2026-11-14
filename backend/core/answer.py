@@ -45,6 +45,15 @@ FORWARD_MESSAGES = {
     ),
 }
 SCOPE_LABELS = {"GRADIVO": None, "ADMIN": ForwardReason.admin, "DRUGO": ForwardReason.out_of_scope}
+# Safety net for rule 2, independent of the model: words that in a student's question mean
+# grades, points or deadlines. Kept to unmistakable ones (not "ispit", "upis", "prolaz", which
+# are also programming words). Croatian, the platform language; other languages add theirs.
+# On the first subject the 4B labelled "Koliko bodova trebam skupiti za četvorku?" GRADIVO.
+ADMIN_TERMS = re.compile(
+    r"\b(ocjen\w*|bodov\w*|kolokvij\w*|dvojk\w*|trojk\w*|četvork\w*|petic\w*|rok\w* za\b|"
+    r"rokov\w*|ispitn\w* rok\w*|datum\w* ispita)",
+    re.IGNORECASE,
+)
 MAX_SOURCE_CHARS = 4000  # per source; a parent section can be several slides long
 _CITATION = re.compile(r"\[(\d+(?:\s*[,;]\s*\d+)*)\]")
 
@@ -140,14 +149,19 @@ def answer_question(
 
 def scope_check(subject: str, topics: list[str], question: str) -> tuple[str, ForwardReason | None]:
     """The `fast` role's label for the question and the forward reason it implies. An unclear
-    reply lets the question through: retrieval and the citation check still guard the answer."""
+    reply lets the question through: retrieval and the citation check still guard the answer.
+    Questions with an unmistakable admin word are forwarded without asking the model."""
+    if ADMIN_TERMS.search(question):
+        return "ADMIN_TERM", ForwardReason.admin
     reply = complete(
         "fast",
         [
             {
                 "role": "user",
                 "content": prompt("scope_check", "fast").format(
-                    subject=subject, topics="; ".join(topics), question=question
+                    subject=subject,
+                    topics="\n".join(f"- {t}" for t in topics),
+                    question=question,
                 ),
             }
         ],
