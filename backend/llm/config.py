@@ -23,6 +23,9 @@ class RoleConfig(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     dimensions: int | None = None
     tokenizer: str | None = None  # embedding role: tokenizer used to measure chunk sizes
+    # embedding / reranker roles: below this best score the clone forwards instead of answering.
+    # Scores are on each model's own scale, so the floor belongs to the model, not the code.
+    min_score: float | None = None
 
     def resolved_api_base(self) -> str | None:
         if self.api_base and self.api_base.startswith(_ENV_PREFIX):

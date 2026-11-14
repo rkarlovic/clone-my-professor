@@ -38,6 +38,21 @@ class ContentType(enum.StrEnum):
     other = "other"
 
 
+class ForwardReason(enum.StrEnum):
+    """Why the clone forwarded a question to the teacher instead of answering (rule 2)."""
+
+    admin = "admin"  # grades, deadlines, exams, obligations
+    out_of_scope = "out_of_scope"  # not about this subject
+    low_score = "low_score"  # nothing retrieved above the score floor
+    no_source = "no_source"  # the model found no answer in the sources, or cited none
+
+
+class TeacherQuestionStatus(enum.StrEnum):
+    open = "open"
+    answered = "answered"
+    dismissed = "dismissed"
+
+
 class Teacher(Base):
     __tablename__ = "teacher"
     id: Mapped[uuid.UUID] = _pk()
@@ -98,3 +113,22 @@ class Chunk(Base):
     week_topic: Mapped[str | None] = mapped_column(String(200))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     sparse_embedding = mapped_column(SPARSEVEC(SPARSE_DIM), nullable=True)
+
+
+class TeacherQuestion(Base):
+    """A forwarded question in the teacher's queue. Holds student text: personal data (rule 9)."""
+
+    __tablename__ = "teacher_question"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    kb_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("kb_version.id"))
+    student_ref: Mapped[str | None] = mapped_column(String(200))  # opaque id, never a name
+    question: Mapped[str] = mapped_column(Text)
+    reason: Mapped[ForwardReason] = mapped_column(Enum(ForwardReason, name="forward_reason"))
+    status: Mapped[TeacherQuestionStatus] = mapped_column(
+        Enum(TeacherQuestionStatus, name="teacher_question_status"),
+        default=TeacherQuestionStatus.open,
+    )
+    answer: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

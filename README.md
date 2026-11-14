@@ -5,9 +5,10 @@ using **only the teacher's approved materials** and following the teacher's teac
 Students reach it from their learning platform (Moodle/Merlin first, later Teams and Google
 Classroom) or from CMP's own web app. Content and users are primarily **Croatian**.
 
-> **Status:** early prototype — build step 1 of 6 (retrieval spike). There is no chat UI and no
-> answer generation yet; what works today is parsing course material, indexing it, and measuring
-> how well search finds the right slide.
+> **Status:** early prototype — build step 1 of 6 (retrieval spike) measured, step 2 (answers)
+> started. There is no chat UI yet; what works today is parsing course material, indexing it,
+> measuring how well search finds the right slide, and command-line answers with citations that
+> forward what they can't ground to a teacher queue.
 
 ## Contents
 
@@ -45,8 +46,9 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking, optional hybrid with BGE-M3 sparse vectors (experiment) |
-| Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline |
-| Tests | pytest: RLS isolation, model config, chunking, citations |
+| Answers | Scope check (`fast`), answer with numbered citations (`answer`), forwarding to a teacher queue when the question is admin/off-topic or the reply cites no source |
+| Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
+| Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |
 
 **First results** (subject *Suvremene tehnike programiranja*, 945 pages, 50 draft golden questions):
 recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense search, and
@@ -55,7 +57,7 @@ reranking (see CLAUDE.md for the full comparison and timings). Questions the clo
 score in the same range as weak answerable ones, so a score threshold alone won't be enough for
 abstention — step 2 needs an explicit out-of-scope check.
 
-Not built yet: answer generation, citations in answers, teacher queue, chat UI, teacher dashboard,
+Not built yet: chat UI, teacher dashboard,
 LMS connectors, background jobs, Langfuse tracing.
 
 ## Architecture
@@ -144,6 +146,13 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    (e.g. a teacher's own exam questions) go in `eval/sets/local/`, which is git-ignored. Hybrid needs
    sparse vectors first: `uv run python -m scripts.sparse --subject <subject>` (experiment).
    Ingest reports record time per step; eval reports record their runtime.
+5. Get the clone's answer (needs `ollama pull qwen3.5:9b` and `qwen3.5:4b`), and evaluate answers
+   on the golden set (~50 s per question on a CPU laptop; `--ids`/`--limit` for small runs):
+   ```bash
+   uv run python -m scripts.ask --subject <subject> --answer "Zašto mi se zamrzne prozor?"
+   uv run python -m scripts.evaluate_answers --subject <subject> --judge
+   ```
+   Questions the clone forwards go to the teacher queue (`teacher_question`); `--no-queue` skips that.
 
 ## Models
 
@@ -169,14 +178,14 @@ golden-set results from the vLLM setup used in the pilot, never on Ollama's quan
 ```
 backend/
   app/          FastAPI app (only /health for now)
-  core/         settings, DB access with RLS scope, models, knowledge-base versions
+  core/         settings, DB access with RLS scope, models, knowledge-base versions, answers, queue
   ingestion/    Docling parsing, chunking, context, ingest pipeline
   retrieval/    search (+ rerank)
-  llm/          LiteLLM wrapper, role resolution, tokenizer
+  llm/          LiteLLM wrapper, role resolution, prompts, tokenizer
   connectors/   LMS-specific code (empty for now)
   jobs/         Procrastinate (empty for now)
   migrations/   Alembic
-  scripts/      smoke, parse, ingest, ask, evaluate
+  scripts/      smoke, parse, ingest, sparse, ask, evaluate, evaluate_answers
   tests/
 config/         models.yaml
 eval/           golden sets (sets/) and run reports (reports/, git-ignored)
@@ -207,8 +216,8 @@ To stop everything: `docker compose -f infra/docker-compose.dev.yml --env-file .
 
 ## Roadmap
 
-1. **Retrieval spike** — parsing, chunking, embeddings, search, recall@5 on a golden set *(in progress)*
-2. **Answers** — model roles, citations, abstention + teacher queue; compare 2–3 open models
+1. **Retrieval spike** — parsing, chunking, embeddings, search, recall@5 on a golden set *(measured; experiments left)*
+2. **Answers** — model roles, citations, abstention + teacher queue; compare 2–3 open models *(in progress)*
 3. **Product** — teacher persona, approval workflow, versioning, question queue, chat UI, direct upload
 4. **Moodle connector** — LTI 1.3 + Web Services polling, then SRCE/Merlin
 5. Teams and Google Classroom connectors

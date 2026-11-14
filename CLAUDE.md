@@ -181,6 +181,7 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 _Update this section when a build step's state changes._
 
 **Step 1 (retrieval spike): pipeline built and measured; experiments and teacher review pending.**
+**Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
 
 Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
@@ -349,6 +350,45 @@ Decisions made in step 1:
   makes `import torch` fail with WinError 126 on `shm.dll`.
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
+**Step 2 (answers), part A: pipeline built 2026-11-14; first full answer evaluation pending.**
+- `core/answer.py` `answer_question`: scope check (`fast`: GRADIVO / ADMIN / DRUGO, given the
+  subject name and lecture labels) → retrieval (same modes as step 1) → score floor → `answer`
+  role with numbered sources `[1]…[n]` → citation check. Forwarded with a reason
+  (`admin`, `out_of_scope`, `low_score`, `no_source`) and a fixed, gender-neutral message when:
+  the scope check says ADMIN/DRUGO; the best score is under the role's `min_score`; the reply
+  contains `NE_ZNAM` (even next to a partial answer); or it cites no real source (rule 1).
+  Citation numbers pointing at no source are removed. Hits sharing a parent section become one
+  source. An unclear scope label lets the question through (later checks still guard it).
+- Prompts in `llm/prompts.py` (platform rules, persona header, scope check, judge),
+  model-neutral, with per-model variants via `prompt_overrides`; their hashes go on every trace
+  with `kb_version_id`, `persona_version` (None until step 3), model ids and config version.
+- Teacher queue: migration `0003` `teacher_question` (kb_id, kb_version_id, opaque
+  student_ref, question, reason, status, answer); `core/queue.py`. No RLS on it yet (step 3 adds
+  teacher-level access). `scripts.ask --answer` queues forwarded questions (`--no-queue` to
+  skip); `scripts.evaluate_answers` never queues.
+- Score floor lives on the model in `models.yaml` (`min_score`): embedding 0.40 (a safety floor
+  under the lowest answerable 0.50); **none for the reranker**: a valid casual question
+  ("Zašto mi se zamrzne prozor…") had top rerank score 0.002, so any floor forwards good
+  questions. Fused hybrid scores are rank-based and get no floor.
+- Dev chat roles (`answer`, `fast`, `judge`) run with `reasoning_effort: none` on CPU; re-test
+  with thinking on vLLM before a model choice.
+- `scripts.evaluate_answers`: answered / cited_expected / retrieved_expected per difficulty,
+  forwarded + reasons for abstain questions; `--judge` adds grounded / on_topic from the `judge`
+  role, judged against the cited slides only (no reference answers); `--ids`, `--difficulty`,
+  `--limit` for small runs.
+- First observations (6 questions e01 e10 h03 h09 h20 h24, v3 dense, dev models):
+  - easy and h03 answered, citing the expected slides; h24 forwarded `admin` by the scope check.
+  - **The 4B scope check misses out-of-scope questions**: h20 (Flask REST API) was labelled
+    GRADIVO; the answer model said `NE_ZNAM`, so it was still forwarded, as `no_source`.
+  - **The 9B judge is lenient**: h09 ("Does Java support multiple inheritance?") began
+    "Da, Java ne dopušta…" and added an unrelated multi-catch paragraph, yet was judged grounded
+    and on topic. Judge results from the dev judge are not trustworthy (see "Open questions").
+  - The 4B as `answer` (tried via a scratch config) added a wrong claim to a correct answer; the
+    9B was stricter (said `NE_ZNAM` when dense search missed slide 742).
+- Timings on this CPU laptop: 9B answer 40–65 s, scope check 1–5 s, judge ~10 s; a question
+  takes ~50 s in dense mode and ~105 s with hybrid + rerank 20 (+40 s retrieval). A 50-question
+  run: ~50 min dense, ~1.5 h hybrid + rerank, plus ~10 min for `--judge`.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -356,8 +396,9 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Then step 2: pull the dev chat models, answer generation with citations, abstention
-   (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
+3. Step 2 part A: full answer evaluation on the golden set (dense and hybrid + rerank 20);
+   then improve the scope check (h20) and look at the judge's leniency; auto-generated check
+   sets (student-style questions from slides). Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
@@ -403,6 +444,11 @@ uv run python -m scripts.ingest --subject <folder>          # new draft kb_versi
 #   --context takes ~11 s per chunk on a CPU laptop (2 h 23 min for 758 chunks)
 uv run python -m scripts.sparse --subject <folder>         # experiment: BGE-M3 sparse vectors for a version
 uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20, --hybrid
+#   --answer: the clone's answer with citations (or forward; queued unless --no-queue)
+#   needs the chat models: ... exec ollama ollama pull qwen3.5:9b  (and qwen3.5:4b)
+uv run python -m scripts.evaluate_answers --subject <folder> --version 3   # answers on the golden set
+#   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank, --hybrid
+#   ~50 s per question on CPU (dense), ~105 s with --hybrid --rerank 20
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
 #   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),
@@ -417,7 +463,6 @@ Planned (later build steps):
 docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, frontend, langfuse, moodle
 docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
 uv run procrastinate --app=jobs.app worker                         # background worker
-uv run python -m eval.run --subject <subject_id>                   # full golden-set eval (answers, grounding, abstention)
 cd frontend && npm install && npm run dev                          # npm test / npm run build
 ```
 

@@ -50,6 +50,7 @@ def two_kb_versions(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, uuid.UUID
     yield v_a, v_b
     with owner_engine.begin() as conn:  # owner is superuser in dev, so RLS does not hide rows
         params = {"va": v_a, "vb": v_b}
+        conn.execute(text("DELETE FROM teacher_question WHERE kb_version_id IN (:va, :vb)"), params)
         conn.execute(text("DELETE FROM chunk WHERE kb_version_id IN (:va, :vb)"), params)
         conn.execute(text("DELETE FROM document WHERE kb_version_id IN (:va, :vb)"), params)
         conn.execute(text("DELETE FROM kb_version WHERE id IN (:va, :vb)"), params)

@@ -8,7 +8,7 @@
 # models on Ollama output — model decisions use the vLLM setup only.
 # A pilot profile (vLLM) will live in a separate file selected via CMP_MODELS_CONFIG.
 
-version: "dev-2026-11-14.2"
+version: "dev-2026-11-14.3"
 
 roles:
   answer:
@@ -17,6 +17,9 @@ roles:
     api_base: os.environ/OLLAMA_API_BASE
     params:
       temperature: 0.2
+      # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
+      # on the vLLM/GPU setup before a model choice is final.
+      reasoning_effort: none
 
   fast:  # classification, query rewriting, out-of-scope check
     kind: chat
@@ -24,6 +27,9 @@ roles:
     api_base: os.environ/OLLAMA_API_BASE
     params:
       temperature: 0.0
+      # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
+      # on the vLLM/GPU setup before a model choice is final.
+      reasoning_effort: none
 
   context:  # short chunk context at indexing time
     kind: chat
@@ -48,18 +54,28 @@ roles:
     api_base: os.environ/OLLAMA_API_BASE
     params:
       temperature: 0.0
+      # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
+      # on the vLLM/GPU setup before a model choice is final.
+      reasoning_effort: none
 
   embedding:
     kind: embedding
     model: ollama/bge-m3:567m
     api_base: os.environ/OLLAMA_API_BASE
     dimensions: 1024  # must match chunk.embedding vector(1024)
+    # Best cosine below this -> forward to the teacher. A safety floor only: on the first
+    # subject the lowest answerable top score was 0.50 and abstain questions scored 0.47-0.64,
+    # so a score cannot separate them; the `fast` scope check does that.
+    min_score: 0.40
     tokenizer: BAAI/bge-m3  # Hugging Face id; chunk sizes are measured with it
 
   reranker:  # served by Infinity (compose profile "rerank")
     kind: rerank
     model: infinity/BAAI/bge-reranker-v2-m3
     api_base: os.environ/INFINITY_API_BASE
+    # No min_score: reranker scores of real questions go as low as 0.002 ("Zašto mi se zamrzne
+    # prozor…", top hits 744/636) while abstain questions reach 0.85, so any floor forwards good
+    # questions. With reranking, the scope check and the citation check decide abstention.
 
   # EXPERIMENT, narrow exception to rule 8: BGE-M3's sparse (lexical) weights for hybrid search.
   # No server we run returns sparse vectors and LiteLLM has no sparse type, so llm/sparse.py
