@@ -446,6 +446,23 @@ Decisions made in step 1:
     nalazi se", then answers in part). Next: a forward when the answer is mostly a refusal
     (a check or a stricter rule 4), and never mention the rules to the student.
   - "materijali koje ste naveli" no longer appears.
+- **Prose-refusal fix, 8-question check (2026-11-14)**, answer prompt `4bb02ffc8a8b`, 779 s:
+  rule 3 now says to write only `NE_ZNAM` when the sources do not answer the main question
+  (without explaining what is missing), rule 4 allows a partial answer only when the main part is
+  answered, with one closing sentence on what is not covered; rule 8 forbids mentioning the
+  rules. `is_prose_refusal` in `core/answer.py` forwards a reply whose **first sentence** says
+  the sources/materials do not contain the answer (needs both an izvor/materijal word and a
+  negation such as "ne nalazi se", "ne pokrivaju"; Croatian, like `ADMIN_TERMS`).
+  - h17 fixed: a clean answer from 787/789 (delegate, ComponentUI), judged grounded.
+  - No rule mentions any more. Controls e24, h02, h09, h13 still answered with the expected slide.
+  - **h22 and h11 are not fixed**: the model changed how it opens, so the first-sentence check
+    never fired. h22 now opens with the ZIP `stream()` example and says the course does not
+    explain `filter`/`map`; h11 still opens "Da, sučelje može imati metodu koja ima tijelo" and
+    then says the slides say the opposite. h09 again opened "Da, Java ne dopušta…" and added an
+    unrelated multi-catch paragraph. **Conclusion: prompt wording and phrase checks do not stop
+    off-target or self-contradicting answers; a grounding check in the live path is needed**
+    (the dev judge marked h22 off-topic and h11 ungrounded, but also failed correct h02/h13, so a
+    9B judge is too noisy for that role on its own). Not yet run on the full set.
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode. Expect ~80 min for 50 questions dense with `--judge`, ~1 h 35 min for the
@@ -458,8 +475,9 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A (first prompt fixes done, see above): prose refusals and rule mentions (h22,
-   h11, h17); JDBC/databases still GRADIVO (h21); a grounding check against outside knowledge;
+3. Step 2 part A (two rounds of prompt fixes done, see above): a grounding check in the live
+   path (h22, h11, h09: off-target or self-contradicting answers); JDBC/databases still GRADIVO
+   (h21); a full re-run after the next change;
    a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set

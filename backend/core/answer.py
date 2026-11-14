@@ -54,6 +54,16 @@ ADMIN_TERMS = re.compile(
     r"rokov\w*|ispitn\w* rok\w*|datum\w* ispita)",
     re.IGNORECASE,
 )
+# A refusal written as prose instead of NE_ZNAM: the first sentence says the sources do not
+# contain the answer ("U izvorima ne nalazi se opis…"). Such a reply still cites a source, so
+# the citation check alone would let it through. Both parts are required, so a normal answer
+# like "Konstruktor ne sadrži povratni tip" does not match. Croatian, like ADMIN_TERMS.
+_REFUSAL_SOURCE = re.compile(r"\b(izvor\w*|materijal\w*)", re.IGNORECASE)
+_REFUSAL_VERB = re.compile(
+    r"\b(ne nalazi\w*|ne nalazim|ne sadrž\w*|ne pokriva\w*|ne spominj\w*|ne objašnjava\w*|"
+    r"nije opisan\w*|nema\w* (informacij\w*|odgovor\w*|opis\w*))",
+    re.IGNORECASE,
+)
 MAX_SOURCE_CHARS = 4000  # per source; a parent section can be several slides long
 _CITATION = re.compile(r"\[(\d+(?:\s*[,;]\s*\d+)*)\]")
 
@@ -198,7 +208,7 @@ def check_citations(raw: str, sources: list[Source]) -> tuple[str | None, list[S
     """(answer text, cited sources), or (None, []) when the reply must not reach the student:
     the model said it does not know (even next to a partial answer), or cited no real source.
     Citation numbers that point at no source are removed from the text."""
-    if not raw or DONT_KNOW in raw.upper().replace(" ", "_"):
+    if not raw or DONT_KNOW in raw.upper().replace(" ", "_") or is_prose_refusal(raw):
         return None, []
     by_n = {s.n: s for s in sources}
     cited: dict[int, Source] = {}
@@ -213,6 +223,13 @@ def check_citations(raw: str, sources: list[Source]) -> tuple[str | None, list[S
     if not cited:
         return None, []
     return text, sorted(cited.values(), key=lambda s: s.n)
+
+
+def is_prose_refusal(raw: str) -> bool:
+    """The reply opens by saying the sources do not answer: forward it like NE_ZNAM. Only the
+    first sentence counts, so a closing "ostatak materijali ne pokrivaju" (rule 4) is fine."""
+    first = re.split(r"(?<=[.!?])\s|\n", raw.strip(), maxsplit=1)[0]
+    return bool(_REFUSAL_SOURCE.search(first) and _REFUSAL_VERB.search(first))
 
 
 def _forward(result: Answer, reason: ForwardReason) -> Answer:

@@ -5,7 +5,7 @@ import uuid
 import pytest
 
 import core.answer as answer
-from core.answer import Source, build_sources, check_citations, scope_check
+from core.answer import Source, build_sources, check_citations, is_prose_refusal, scope_check
 from core.models import ForwardReason
 from core.settings import REPO_ROOT
 from llm.config import load_model_config
@@ -125,3 +125,28 @@ def test_admin_terms_forward_without_the_model(monkeypatch: pytest.MonkeyPatch, 
 )
 def test_programming_words_are_not_admin_terms(question) -> None:
     assert not answer.ADMIN_TERMS.search(question)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "U priloženim izvorima ne nalazi se opći opis korištenja Stream API-a [1].",
+        "U izvorima koje sam pronašao ne nalazi se opis toga.\n\nIzvori [1] i [2] spominju…",
+        "Materijali ne pokrivaju tu temu [1].",
+    ],
+)
+def test_prose_refusal_is_forwarded(raw: str) -> None:
+    assert is_prose_refusal(raw)
+    assert check_citations(raw, [Source(1, "a.pdf", [1], "t", 0.9)]) == (None, [])
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "Konstruktor ne sadrži povratni tip [1].",
+        "Java ne dopušta višestruko nasljeđivanje klasa [1]. Ostatak materijali ne pokrivaju.",
+        "Iznimka se baca naredbom throw [1].\n\nIzvori ne objašnjavaju finally blok.",
+    ],
+)
+def test_normal_answer_is_not_a_refusal(raw: str) -> None:
+    assert not is_prose_refusal(raw)
