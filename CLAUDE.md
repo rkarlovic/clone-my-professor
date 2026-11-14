@@ -166,6 +166,11 @@ Done:
 - Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
   the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
   to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
+  **Decision (2026-11-14): work with this AI-reviewed set for now; the teacher reviews it later**
+  (before the pilot and before any model choice is final). Scores until then are provisional: a
+  teacher's source changes can move individual questions. Provisional defaults until the
+  teacher decides: h24/h25 are forwarded to the teacher (rule 2: deadlines go to the teacher),
+  and slide 313 stays a partial source of h09 and a known wrong answer for h11.
   Sources re-checked against the PDF on 2026-11-13 (also by Claude): many questions gained
   slides that also answer them, h09's sources were replaced; notes tagged `[review 2026-11-13]`
   list open questions for the teacher (outdated slides 313 and 365; h24/h25 forward or answer).
@@ -283,15 +288,16 @@ Decisions made in step 1:
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
 Next:
-1. Teacher reviews the golden set: `expected_sources` first, then reference answers, the
-   `[review 2026-11-13]` notes and the h24/h25 decision.
-2. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
+1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
    teacher, not a retrieval one.
-3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
+2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains.
-4. Then step 2: pull the dev chat models, answer generation with citations, abstention
+3. Then step 2: pull the dev chat models, answer generation with citations, abstention
    (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
+4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
+   (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
+   313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
 
 ## Conventions
 - Keep the core platform-independent; no LMS-specific code outside `connectors/`.
