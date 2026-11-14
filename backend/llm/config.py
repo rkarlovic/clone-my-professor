@@ -10,12 +10,14 @@ from pydantic import BaseModel, Field
 
 from core.settings import get_settings
 
-Role = Literal["answer", "fast", "context", "vision", "judge", "embedding", "reranker"]
+Role = Literal["answer", "fast", "context", "vision", "judge", "embedding", "reranker", "sparse"]
 _ENV_PREFIX = "os.environ/"
 
 
 class RoleConfig(BaseModel):
-    kind: Literal["chat", "embedding", "rerank"]
+    # "sparse" is the one kind not served through LiteLLM (no API we run returns sparse
+    # vectors): an experiment, see llm/sparse.py and CLAUDE.md "Decisions".
+    kind: Literal["chat", "embedding", "rerank", "sparse"]
     model: str
     api_base: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)

@@ -1,6 +1,7 @@
 """Show what retrieval finds for a question (no answer generation yet).
 
-uv run python -m scripts.ask --subject <folder> [--version N] [-k 5] [--rerank 20] "pitanje"
+uv run python -m scripts.ask --subject <folder> [--version N] [-k 5] [--rerank 20] [--hybrid]
+                             "pitanje"
 """
 
 import argparse
@@ -21,6 +22,7 @@ def main() -> None:
     ap.add_argument("--version", type=int, help="default: newest version")
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--rerank", type=int, metavar="N", help="rerank the top N dense hits")
+    ap.add_argument("--hybrid", action="store_true", help="dense + sparse, rank-fused")
     ap.add_argument("--full", action="store_true", help="print whole chunks")
     args = ap.parse_args()
 
@@ -28,7 +30,10 @@ def main() -> None:
         version = find_version(s, args.subject, args.version)
     print(f"{args.subject} v{version.version} ({version.status.value})\n")
     for i, hit in enumerate(
-        search(version.id, args.question, args.k, rerank_candidates=args.rerank), 1
+        search(
+            version.id, args.question, args.k, rerank_candidates=args.rerank, hybrid=args.hybrid
+        ),
+        1,
     ):
         body = hit.text if args.full else hit.text[:300].replace("\n", " ")
         print(f"{i}. {hit.score:.3f}  [{hit.citation}]  {hit.content_type}")

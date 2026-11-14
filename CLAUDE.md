@@ -151,14 +151,16 @@ Done:
   superuser. Migration `0002` adds `chunk.also_on_pages`. Tests (RLS isolation, model config,
   chunking, citations) pass.
 - Model layer: roles resolved from `config/models.yaml` (dev profile, Ollama). Only `embedding`
-  (BGE-M3) has been used so far; reranker and `context` are wired but not yet evaluated; the chat
-  models are placeholders that fit an 11 GB GPU and have not been pulled.
+  (BGE-M3), `reranker`, `context` (qwen3.5 via Ollama) and the experimental `sparse` role have
+  been used; the chat models are placeholders that fit an 11 GB GPU and have not been pulled.
 - Ingestion: Docling → slide-level chunks → BGE-M3 → pgvector, every run a new draft version with
   a report in `eval/reports/<subject>/`. Retrieval: dense search filtered by `kb_version_id`,
   optional rerank.
 - First subject `Suvremene_tehnike_programiranja` (1 PDF, 945 pages). Local DB (rebuilt on a new
   machine 2026-11-12, older versions are gone): v1 = 766 embedded chunks without duplicate
-  folding; **v2 = current**, 758 embedded chunks, 67 parents, 8 duplicate pages folded.
+  folding; v2 = 758 embedded chunks, 67 parents, 8 duplicate pages folded; **v3 = current**,
+  same chunks as v2 plus a `context` sentence per chunk (`--context`). v2 and v3 also have sparse
+  vectors (`scripts.sparse`).
 - Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
   the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
   to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
@@ -180,6 +182,40 @@ Done:
   h24 0.78 because slide 480 does state the deadline). Cost on this CPU laptop: ~24 s per
   question (1,000 pairs in 20 min) — fine for evaluation, not for live chat without a GPU.
   **Not made the default**: the gain is real but it trades one miss for another.
+- Context and hybrid experiments (2026-11-14), recall@5 / MRR, k=5, 19 hard answerable questions
+  (easy recall@5 is 1.00 everywhere):
+
+  | version, mode            | easy MRR | hard recall@5 | hard MRR | hard misses      |
+  |--------------------------|----------|---------------|----------|------------------|
+  | v2 dense                 | 1.00     | 0.84          | 0.60     | h03 h09 h14      |
+  | v2 dense + rerank 20     | 0.98     | 0.84          | 0.68     | h03 h11 h14      |
+  | v2 hybrid                | 0.95     | 0.68          | 0.52     | h02 h03 h04 h09 h11 h14 |
+  | v3 dense                 | 0.92     | 0.89          | 0.70     | h11 h14          |
+  | v3 dense + rerank 20     | 1.00     | 0.89          | 0.77     | h11 h14          |
+  | v3 hybrid                | 0.90     | 0.79          | 0.59     | h03 h11 h14 h17  |
+  | **v3 hybrid + rerank 20**| **1.00** | **0.95**      | **0.79** | h11              |
+
+  - **`--context` helps**: it fixes h03 (the "zamrzne" wording gap) and h09 (English question),
+    because the sentence says what a slide is about in other words. It costs easy MRR in dense
+    search (1.00 → 0.92), which reranking restores. The sentences are wordy (most end with
+    "Materijal se direktno uklapa u temu…"); a tighter `context` prompt is worth a try.
+  - **Sparse as an equal partner in rank fusion hurts** (v2 0.84 → 0.68, v3 0.89 → 0.79): literal
+    token overlap pulls in slides that share words but not meaning. As a **candidate pool for the
+    reranker** it helps by one question: h14's slide 378 is in the fused top 20 but not the dense
+    top 20. One question of 19 is weak evidence; re-check on a second subject before relying on it.
+  - h11 stays a miss in every mode: slide 57 (literal "Interface1" / "// tijelo") and outdated
+    slide 313 outrank 285/286; slide 285's context sentence mostly talks about static methods.
+  - Abstain questions are still not separable by any score (v3 rerank: h24 0.85 because slide 480
+    states the deadline; lowest answerable 0.0098 vs h22 0.074).
+- Timings on this CPU laptop (ThinkPad T14s Gen 6 AMD, no GPU; Ollama in Docker), for planning:
+  - `--context` ingest of 758 chunks: **8,612 s (2 h 23 min)**, almost all of it the `context`
+    step, ~10.8 s per chunk (qwen3.5 with thinking off; with thinking on it was ~150 s/chunk).
+    Parse is cached; dense embedding is a few minutes. Ingest reports now record per-step times
+    under `timings`, and eval reports their total `seconds`.
+  - `scripts.sparse` backfill: 444 s for v2, 554 s for v3 (longer texts with context), ~0.6–0.7 s
+    per chunk on CPU.
+  - Golden-set eval (50 questions): dense 4 s; hybrid 25 s (incl. sparse model load); rerank 20
+    ~16–17 min (~20 s per question) — evaluation only, not live chat without a GPU.
 
 Decisions made in step 1:
 - Chunking: one chunk per slide; repeated boilerplate slides dropped (seen ≥ 3×); slides under
@@ -211,6 +247,13 @@ Decisions made in step 1:
   are `example` and stay retrievable. The heuristic is regex-based for the spike.
 - **A retrieval-score threshold alone cannot decide abstention** (scores overlap); step 2 needs
   an explicit out-of-scope/admin check (`fast` role) in addition to the threshold.
+- The `context` role runs with `reasoning_effort: none` (OpenAI-schema parameter through
+  LiteLLM): a thinking model otherwise spends minutes per chunk on reasoning nobody reads.
+- The reranker reads heading path + context sentence + text, the same text that was embedded.
+- **BGE-M3 sparse is an experiment and a narrow, documented exception to rule 8**: LiteLLM has no
+  sparse-embedding API, so `llm/sparse.py` loads the model with `transformers` (the model id lives
+  only in `models.yaml`, role `sparse`, kind `sparse`; needs `uv sync --group ingest`). It is
+  opt-in (`--hybrid`), off by default, and gets removed if a second subject doesn't confirm it.
 - A vLLM pilot profile will be a separate models file selected with `CMP_MODELS_CONFIG`; the
   current `config/models.yaml` is dev-only.
 - Windows dev: use `127.0.0.1`, not `localhost` (IPv6 stall); scripts reconfigure stdout to UTF-8.
@@ -222,12 +265,11 @@ Decisions made in step 1:
 Next:
 1. Teacher reviews the golden set: `expected_sources` first, then reference answers, the
    `[review 2026-11-13]` notes and the h24/h25 decision.
-2. Retrieval experiments, each measured with `scripts.evaluate` (`--rerank 20` done, see
-   above): sparse/hybrid (BGE-M3 sparse; h03 is a wording gap, h09 an English question on
-   Croatian slides); `--context` ingest (slow on CPU), which may also help the reranker see what
-   a slide is about rather than its literal words (h11); chunk size settings. Target the hard
-   misses. Slide 313 (outdated) is a content problem for the teacher, not a retrieval one.
-3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation).
+2. Retrieval experiments left (rerank, `--context` and hybrid done, see above): a tighter
+   `context` prompt; chunk size settings; h11. Slide 313 (outdated) is a content problem for the
+   teacher, not a retrieval one.
+3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
+   and to confirm or drop the `--context` and hybrid-as-rerank-pool gains.
 4. Then step 2: pull the dev chat models, answer generation with citations, abstention
    (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
 
@@ -269,9 +311,12 @@ uv run python -m scripts.parse  --subject <folder>          # Docling parse only
 uv run python -m scripts.ingest --subject <folder>          # new draft kb_version; report in eval/reports/
 #   options: --context (`context` role per chunk) --ocr (scans) --min-tokens N --max-tokens N
 #            --duplicate-similarity F (default 0.85) | --keep-duplicates (no folding)
-uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20
+#   --context takes ~11 s per chunk on a CPU laptop (2 h 23 min for 758 chunks)
+uv run python -m scripts.sparse --subject <folder>         # experiment: BGE-M3 sparse vectors for a version
+uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20, --hybrid
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
-#   per difficulty (easy/hard); abstain questions report their top score; --version N, -k, --rerank 20
+#   per difficulty (easy/hard); abstain questions report their top score;
+#   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first)
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
 uv run fastapi dev app/main.py           # API with reload (only /health for now)

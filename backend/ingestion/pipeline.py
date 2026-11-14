@@ -54,12 +54,20 @@ class IngestReport:
     # too: a wrong fold hides a slide's own content behind another slide's citation.
     duplicates: dict = field(default_factory=dict)
     seconds: float = 0.0
+    # Seconds per step (parse, context, embedding, store), summed over documents, so later
+    # ingests can be planned: on a CPU laptop the context step dominates.
+    timings: dict = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
+def embedded_text(heading_path: str | None, context: str | None, text: str) -> str:
+    """What gets embedded (dense and sparse): heading path + optional context + text (recipe
+    step 4). Stored chunks keep these parts separately, so the text can be rebuilt later."""
+    return "\n".join(x for x in (heading_path, context, "", text) if x is not None)
+
+
 def embedding_text(draft: ChunkDraft, context: str | None) -> str:
-    """What gets embedded: heading path + optional context + text (recipe step 4)."""
-    return "\n".join(x for x in (draft.heading_path, context, "", draft.text) if x is not None)
+    return embedded_text(draft.heading_path, context, draft.text)
 
 
 SOLUTION_FOLDERS = {"rjesenja", "rješenja", "rjesenje", "rješenje", "solutions"}
@@ -102,7 +110,16 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
     report = IngestReport(subject, str(version_id), version_no, asdict(options), models)
     log.info("subject %s -> kb_version %s (v%d)", subject, version_id, version_no)
 
+    clock = time.time()
+
+    def lap(step: str) -> None:
+        nonlocal clock
+        now = time.time()
+        report.timings[step] = round(report.timings.get(step, 0.0) + now - clock, 1)
+        clock = now
+
     for path in source_files(source_dir):
+        clock = time.time()
         doc = parse_file(path, cache_dir_for(source_dir), ocr=options.ocr)
         pages = load_pages(path, doc)
         drafts = build_chunks(pages, subject.replace("_", " "), count_tokens, options.chunking)
@@ -110,6 +127,7 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
             for d in drafts:
                 d.content_type = ContentType.solution
         to_embed = [d for d in drafts if d.embed]
+        lap("parse_and_chunk")
 
         contexts: dict = {}
         if options.with_context:
@@ -119,6 +137,7 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
                 contexts[d.key] = chunk_context(d.heading_path, d.text)
                 if i % 50 == 0:
                     log.info("context %d/%d", i, len(to_embed))
+            lap("context")
 
         vectors: dict = {}
         for i in range(0, len(to_embed), options.embed_batch):
@@ -126,6 +145,7 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
             texts = [embedding_text(d, contexts.get(d.key)) for d in batch]
             vectors.update(zip((d.key for d in batch), embed(texts), strict=True))
             log.info("embedded %d/%d", min(i + options.embed_batch, len(to_embed)), len(to_embed))
+        lap("embedding")
 
         with kb_scope(version_id) as s:
             document = Document(
@@ -159,6 +179,7 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
                         )
                     )
                 s.flush()
+        lap("store")
 
         report.documents += 1
         report.pages += len(pages)

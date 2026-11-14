@@ -8,7 +8,7 @@
 # models on Ollama output — model decisions use the vLLM setup only.
 # A pilot profile (vLLM) will live in a separate file selected via CMP_MODELS_CONFIG.
 
-version: "dev-2026-11-10.1"
+version: "dev-2026-11-14.2"
 
 roles:
   answer:
@@ -31,6 +31,9 @@ roles:
     api_base: os.environ/OLLAMA_API_BASE
     params:
       temperature: 0.0
+      # One or two sentences per chunk need no reasoning: with it, qwen3.5 wrote ~2,000 hidden
+      # tokens per chunk (~150 s on CPU); without it ~8 s and the same sentence.
+      reasoning_effort: none
 
   vision:  # image / diagram captions during ingestion
     kind: chat
@@ -57,6 +60,16 @@ roles:
     kind: rerank
     model: infinity/BAAI/bge-reranker-v2-m3
     api_base: os.environ/INFINITY_API_BASE
+
+  # EXPERIMENT, narrow exception to rule 8: BGE-M3's sparse (lexical) weights for hybrid search.
+  # No server we run returns sparse vectors and LiteLLM has no sparse type, so llm/sparse.py
+  # loads this Hugging Face model in-process (torch, ingest dependency group). Keep it only if
+  # the golden set shows a gain; then move it behind a server the model layer can call.
+  sparse:
+    kind: sparse
+    model: BAAI/bge-m3
+    params:
+      max_length: 8192
 
 # Per-model prompt variants, keyed by LiteLLM model string. Never branch on
 # model names in code; put the variant here instead.

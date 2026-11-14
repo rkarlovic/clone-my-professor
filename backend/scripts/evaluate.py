@@ -1,15 +1,16 @@
 """Retrieval evaluation on a subject's golden set (eval/sets/<subject>.yaml).
 
-    uv run python -m scripts.evaluate --subject <id> [--version N] [-k 5] [--rerank 20]
+    uv run python -m scripts.evaluate --subject <id> [--version N] [-k 5] [--rerank 20] [--hybrid]
 
 answerable questions -> recall@k (any expected source in the top k) and MRR, per difficulty.
 out_of_scope / admin -> best retrieval score, to calibrate the abstention threshold (step 2).
-Report: eval/reports/<subject>/eval-v<N>-<timestamp>.json
+Report: eval/reports/<subject>/eval-v<N>[-hybrid][-rerankM]-k<K>-<timestamp>.json
 """
 
 import argparse
 import json
 import sys
+import time
 from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Literal
@@ -65,6 +66,7 @@ def main() -> None:
     ap.add_argument("--version", type=int)
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--rerank", type=int, metavar="N")
+    ap.add_argument("--hybrid", action="store_true", help="dense + sparse, rank-fused")
     args = ap.parse_args()
 
     path = REPO_ROOT / "eval" / "sets" / f"{args.subject}.yaml"
@@ -72,9 +74,12 @@ def main() -> None:
     with Session(app_engine()) as s:
         version = find_version(s, args.subject, args.version)
 
+    started = time.time()
     results = []
     for q in golden.questions:
-        hits = search(version.id, q.question, args.k, rerank_candidates=args.rerank)
+        hits = search(
+            version.id, q.question, args.k, rerank_candidates=args.rerank, hybrid=args.hybrid
+        )
         expected = {(src.document, src.page_or_slide) for src in q.expected_sources}
         # A folded duplicate counts on every page it is on: whichever copy the golden set
         # names, the indexed chunk is the same content.
@@ -133,19 +138,26 @@ def main() -> None:
         "kb_version_id": str(version.id),
         "k": args.k,
         "rerank_candidates": args.rerank,
+        "hybrid": args.hybrid,
         "models": {"embedding": trace_metadata("embedding")}
-        | ({"reranker": trace_metadata("reranker")} if args.rerank else {}),
+        | ({"reranker": trace_metadata("reranker")} if args.rerank else {})
+        | ({"sparse": trace_metadata("sparse")} if args.hybrid else {}),
         "golden_set": str(path.relative_to(REPO_ROOT)),
         "summary": summary,
+        "seconds": round(time.time() - started, 1),
         "results": results,
         "created_at": datetime.now(UTC).isoformat(),
     }
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
-    out = REPO_ROOT / "eval" / "reports" / args.subject / f"eval-v{version.version}-{stamp}.json"
+    mode = ("-hybrid" if args.hybrid else "") + (f"-rerank{args.rerank}" if args.rerank else "")
+    name = f"eval-v{version.version}{mode}-k{args.k}-{stamp}.json"
+    out = REPO_ROOT / "eval" / "reports" / args.subject / name
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print(f"{args.subject} v{version.version}, k={args.k}, rerank={args.rerank}")
+    print(
+        f"{args.subject} v{version.version}, k={args.k}, rerank={args.rerank}, hybrid={args.hybrid}"
+    )
     for name in ("easy", "hard", "all"):
         if name in summary:
             print(f"  {name:5} {summary[name]}")
@@ -156,6 +168,7 @@ def main() -> None:
             print(f"    {r['id']} expected {r['expected_pages']} got [{got}]  {r['question']}")
     print(f"  abstain top scores: {summary['abstain']['top_scores']}")
     print(f"  lowest top score among answerable: {summary['abstain']['answerable_top_score_min']}")
+    print(f"  {report['seconds']:.0f}s for {len(results)} questions")
     print(f"report: {out}")
 
 

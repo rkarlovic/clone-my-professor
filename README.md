@@ -44,12 +44,14 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Database | Alembic migration for knowledge bases, versions, documents and chunks; row-level security per `kb_version` with a non-owner app role |
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
-| Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
+| Retrieval | Dense vector search filtered by `kb_version`, optional reranking, optional hybrid with BGE-M3 sparse vectors (experiment) |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline |
 | Tests | pytest: RLS isolation, model config, chunking, citations |
 
 **First results** (subject *Suvremene tehnike programiranja*, 945 pages, 50 draft golden questions):
-recall@5 is **1.00** on easy questions and **0.84** on hard ones. Questions the clone should decline
+recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense search, and
+**0.95** on hard ones with a context sentence per chunk (`--context`) plus hybrid candidates and
+reranking (see CLAUDE.md for the full comparison and timings). Questions the clone should decline
 score in the same range as weak answerable ones, so a score threshold alone won't be enough for
 abstention — step 2 needs an explicit out-of-scope check.
 
@@ -123,7 +125,8 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    ```bash
    uv run python -m scripts.ingest --subject <subject>
    ```
-   Options: `--context` (adds a short context per chunk with the `context` model), `--ocr` (for
+   Options: `--context` (adds a short context per chunk with the `context` model; ~11 s per chunk
+   on a CPU laptop, so hours for a large subject), `--ocr` (for
    scans), `--min-tokens N`, `--max-tokens N`, `--duplicate-similarity F` (default 0.85) or
    `--keep-duplicates`. Repeated slides are indexed once; the report's `duplicates` lists each
    folded page and the page it is indexed under.
@@ -136,7 +139,9 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    ```bash
    uv run python -m scripts.evaluate --subject <subject>
    ```
-   `ask` and `evaluate` also take `--version N` and `--rerank 20`.
+   `ask` and `evaluate` also take `--version N`, `--rerank 20` and `--hybrid`. Hybrid needs
+   sparse vectors first: `uv run python -m scripts.sparse --subject <subject>` (experiment).
+   Ingest reports record time per step; eval reports record their runtime.
 
 ## Models
 
@@ -145,8 +150,9 @@ Switching a model means editing that file and re-running the golden set — no c
 
 | Role | Dev model (Ollama) | Purpose |
 |---|---|---|
-| `embedding` | BGE-M3 | vectors for search (the only role in use so far) |
+| `embedding` | BGE-M3 | vectors for search |
 | `reranker` | bge-reranker-v2-m3 (Infinity) | reorders search candidates |
+| `sparse` | BGE-M3 (transformers, experiment) | keyword-style vectors for hybrid search |
 | `answer` | Qwen 3.5 9B | student answers (step 2) |
 | `fast` | Qwen 3.5 4B | query rewriting, out-of-scope check |
 | `context` | Qwen 3.5 4B | chunk context at indexing |
