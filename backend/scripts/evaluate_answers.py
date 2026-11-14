@@ -7,8 +7,8 @@ answerable -> answered (not forwarded); cited_expected (the answer cites an expe
 out_of_scope / admin -> forwarded (and with which reason).
 --judge -> the `judge` role checks each answer against the slides it cites: grounded (everything
 it claims is in them) and on_topic (it answers the question). No reference answers are used.
-Each question runs the `fast` and `answer` roles (~1 min on a CPU laptop; --judge adds as much),
-so a 50-question run takes about an hour. Forwarded questions are NOT put in the teacher queue.
+Each question runs the `fast` and `answer` roles (~80 s on a CPU laptop with dev models; --judge
+adds 10-45 s): a 50-question run took 78 min. Forwarded questions are NOT put in the teacher queue.
 Report: eval/reports/<subject>/answers-v<N>[-<set>][-hybrid][-rerankM]-k<K>-<timestamp>.json
 """
 
@@ -65,13 +65,28 @@ def main() -> None:
 
     started = time.time()
     results = []
+    errors: dict[str, str] = {}
     for i, q in enumerate(questions, 1):
-        a = answer_question(
-            version.id, q.question, k=args.k, rerank_candidates=args.rerank, hybrid=args.hybrid
-        )
+        try:  # one failed model call (e.g. a crashed runner) must not lose the whole run
+            a = retry(
+                lambda q=q: answer_question(
+                    version.id,
+                    q.question,
+                    k=args.k,
+                    rerank_candidates=args.rerank,
+                    hybrid=args.hybrid,
+                )
+            )
+        except Exception as e:  # noqa: BLE001 - recorded in the report, run continues
+            errors[q.id] = repr(e)[:300]
+            print(f"[{i}/{len(questions)}] {q.id} ERROR {errors[q.id]}", flush=True)
+            continue
         r = score(q, a)
         if args.judge and not a.forwarded:
-            r["judge"] = judge(a)
+            try:
+                r["judge"] = retry(lambda a=a: judge(a))
+            except Exception as e:  # noqa: BLE001
+                r["judge_error"] = repr(e)[:300]
         results.append(r)
         verdict = r.get("judge", {})
         print(
@@ -97,6 +112,7 @@ def main() -> None:
         "judge_prompt_version": prompt_version(["judge"], "judge") if args.judge else None,
         "golden_set": str(path.relative_to(REPO_ROOT) if path.is_relative_to(REPO_ROOT) else path),
         "summary": summary,
+        "errors": errors,
         "seconds": round(time.time() - started, 1),
         "results": results,
         "created_at": datetime.now(UTC).isoformat(),
@@ -123,8 +139,21 @@ def main() -> None:
     )
     for name, values in summary.items():
         print(f"  {name:10} {values}")
+    if errors:
+        print(f"  errors ({len(errors)}): {list(errors)}")
     print(f"  {report['seconds']:.0f}s")
     print(f"report: {out}")
+
+
+def retry(call, attempts: int = 2, wait: float = 15.0):
+    """Ollama restarts a killed model runner on the next request, so one retry is enough."""
+    for attempt in range(attempts):
+        try:
+            return call()
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(wait)
 
 
 def score(q: Question, a: Answer) -> dict:

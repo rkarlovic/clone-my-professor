@@ -8,7 +8,7 @@
 # models on Ollama output — model decisions use the vLLM setup only.
 # A pilot profile (vLLM) will live in a separate file selected via CMP_MODELS_CONFIG.
 
-version: "dev-2026-11-14.3"
+version: "dev-2026-11-14.4"
 
 roles:
   answer:
@@ -20,6 +20,10 @@ roles:
       # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
       # on the vLLM/GPU setup before a model choice is final.
       reasoning_effort: none
+      # Dev only: unload after every call. Ollama's llama.cpp runner keeps a prompt cache of
+      # up to 8 GB per model (100-220 MB per prompt for qwen3.5); in the 15 GB Docker VM the
+      # 9B grew to 10.4 GB and was OOM-killed after 5 eval questions. Reload costs ~10 s.
+      keep_alive: 0
 
   fast:  # classification, query rewriting, out-of-scope check
     kind: chat
@@ -30,6 +34,7 @@ roles:
       # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
       # on the vLLM/GPU setup before a model choice is final.
       reasoning_effort: none
+      keep_alive: 0  # dev only, see `answer`
 
   context:  # short chunk context at indexing time
     kind: chat
@@ -57,6 +62,7 @@ roles:
       # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
       # on the vLLM/GPU setup before a model choice is final.
       reasoning_effort: none
+      keep_alive: 0  # dev only, see `answer`
 
   embedding:
     kind: embedding

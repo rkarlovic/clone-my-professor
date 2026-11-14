@@ -270,14 +270,18 @@ Done:
     or two questions that trade places, so this golden set cannot tell prompt variants apart.
     Prompt tuning waits for more questions or a second subject. Ingest reports now record
     `prompt_version` (hash of the prompt) next to the model id.
-- **Teacher-written question set (2026-11-14):** the teacher's 62 oral-exam practice questions
+- **Teacher-written question set (2026-11-14):** the teacher's 60 numbered oral-exam practice questions
   (2016-17, docx in `data/.questions/`) are the first human-written questions. They are the
   teacher's text, so the set lives in **`eval/sets/local/Suvremene_tehnike_programiranja.teacher.yaml`
   (git-ignored, never committed)**, run with `--set`, questions grouped as `exam`.
   `expected_sources` were marked by Claude from the slide text, a title index of every slide and
   keyword search, **not only from search results** (that would bias the set toward the retriever
   under test); not yet confirmed by the teacher. Many questions have several parts; their
-  sources cover all parts and a hit on any counts. Results (recall@5 / MRR, 62 questions):
+  sources cover all parts and a hit on any counts. Ids t01–t60 follow the docx numbering; an
+  unnumbered paragraph continues the question before it (35 + "(auto)boxing", 60 + "JUnit").
+  The table below was measured on a first parse that split those two into separate questions
+  (62); on the corrected 60, v3 dense is 0.98 / 0.89 (same single miss, t02); the other modes
+  are to be re-run. Results (recall@5 / MRR, 62-question parse):
 
   | mode                  | v2          | v3              | v4          |
   |-----------------------|-------------|-----------------|-------------|
@@ -350,7 +354,7 @@ Decisions made in step 1:
   makes `import torch` fail with WinError 126 on `shm.dll`.
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
-**Step 2 (answers), part A: pipeline built 2026-11-14; first full answer evaluation pending.**
+**Step 2 (answers), part A: pipeline built and first evaluated 2026-11-14; prompt fixes next.**
 - `core/answer.py` `answer_question`: scope check (`fast`: GRADIVO / ADMIN / DRUGO, given the
   subject name and lecture labels) → retrieval (same modes as step 1) → score floor → `answer`
   role with numbered sources `[1]…[n]` → citation check. Forwarded with a reason
@@ -385,9 +389,32 @@ Decisions made in step 1:
     and on topic. Judge results from the dev judge are not trustworthy (see "Open questions").
   - The 4B as `answer` (tried via a scratch config) added a wrong claim to a correct answer; the
     9B was stricter (said `NE_ZNAM` when dense search missed slide 742).
-- Timings on this CPU laptop: 9B answer 40–65 s, scope check 1–5 s, judge ~10 s; a question
-  takes ~50 s in dense mode and ~105 s with hybrid + rerank 20 (+40 s retrieval). A 50-question
-  run: ~50 min dense, ~1.5 h hybrid + rerank, plus ~10 min for `--judge`.
+- **First full answer evaluation (2026-11-14)**: golden set, v3 dense k=5, dev models (9B answer
+  + judge, 4B scope), config `dev-2026-11-14.4`, 50 questions in **4,703 s (78 min)**, no errors:
+
+  | group | answered | cites expected slide | expected slide retrieved | judge: grounded | judge: on topic |
+  |-------|----------|----------------------|--------------------------|-----------------|-----------------|
+  | easy (25) | 0.96 | 0.96 | 0.96 | 0.92 | 1.00 |
+  | hard (19) | 0.95 | 0.84 | 0.89 | 0.61 | 0.94 |
+
+  Abstain (6): 5 forwarded (h24/h25 `admin` by the scope check; h20/h21/h23 `no_source`: the
+  scope check labelled them GRADIVO, the answer model said `NE_ZNAM`), **h22 answered**.
+  - **Answers that cite real slides but add outside knowledge** pass the citation check: h22
+    (Stream API, not in the course; slide 523 only mentions `stream()`, the model filled in
+    `filter`/`map`) and h11 (Java 8 default methods explained from general knowledge). Rule 1
+    needs more than "cites a source": a grounding check in the live path, or a stricter prompt.
+  - **Scope check false positive**: e24 "Što je imitiranje objekata (mocking) u testiranju?" was
+    labelled ADMIN: the 4B reads *testiranje* (software testing) as exams.
+  - The 9B sometimes treats the sources as the student's ("materijala koje ste naveli") and
+    misreads words ("Javin programski okvir" → "javni"). Both are prompt work.
+  - h14 (retrieval missed slide 378) was forwarded as `no_source` instead of guessed: correct.
+  - **The dev judge is noisy both ways**: it passed h09's contradictory answer in the 6-question
+    run, failed h02 although slide 617 says exactly what the answer says, and gave no verdict on
+    h11. Treat judge numbers as rough until a person checks a sample of verdicts.
+- Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
+  per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
+  in dense mode. Expect ~80 min for 50 questions dense with `--judge`, ~1 h 35 min for the
+  teacher's 60, and ~40 s more per question with hybrid + rerank 20.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
@@ -396,9 +423,11 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A: full answer evaluation on the golden set (dense and hybrid + rerank 20);
-   then improve the scope check (h20) and look at the judge's leniency; auto-generated check
-   sets (student-style questions from slides). Part B (model choice) needs the vLLM/GPU setup.
+3. Step 2 part A: prompt fixes (scope check: software testing is GRADIVO, ADMIN only for the
+   student's own grades/exams/deadlines; answer prompt: sources are the teacher's materials, say
+   only what they say) and re-run; a grounding check against outside knowledge (h22, h11);
+   a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
+   auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
@@ -448,7 +477,7 @@ uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --versi
 #   needs the chat models: ... exec ollama ollama pull qwen3.5:9b  (and qwen3.5:4b)
 uv run python -m scripts.evaluate_answers --subject <folder> --version 3   # answers on the golden set
 #   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank, --hybrid
-#   ~50 s per question on CPU (dense), ~105 s with --hybrid --rerank 20
+#   ~95 s per question on CPU (dense, with --judge; 78 min for 50), ~40 s more with --hybrid --rerank 20
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
 #   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),

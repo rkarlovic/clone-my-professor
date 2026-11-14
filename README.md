@@ -147,7 +147,7 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    sparse vectors first: `uv run python -m scripts.sparse --subject <subject>` (experiment).
    Ingest reports record time per step; eval reports record their runtime.
 5. Get the clone's answer (needs `ollama pull qwen3.5:9b` and `qwen3.5:4b`), and evaluate answers
-   on the golden set (~50 s per question on a CPU laptop; `--ids`/`--limit` for small runs):
+   on the golden set (~1.5 min per question with the judge on a CPU laptop; `--ids`/`--limit` for small runs):
    ```bash
    uv run python -m scripts.ask --subject <subject> --answer "Zašto mi se zamrzne prozor?"
    uv run python -m scripts.evaluate_answers --subject <subject> --judge
