@@ -15,7 +15,7 @@ Current phase: **prototype → pilot** (1–2 subjects, 50–150 students, one s
 7. CMP must **not grade students, decide access, or formally steer progression** (keeps it outside the AI Act high-risk category). Flag any feature that drifts toward this.
 8. **CMP is model-agnostic.** All model calls go through the LiteLLM layer, and which model serves which role is set in `config/models.yaml`, never in code. Never import a provider SDK in the core, and never depend on a feature only one provider has (see "Model layer").
 9. Personal data stays in the EU; no provider may train on our data; store only what is needed (LTI claims minimised, no audio recordings, transcripts only).
-10. Any change to retrieval, prompts, persona handling or the model config must pass the **golden question set** before merge.
+10. Any change to retrieval, prompts, persona handling or the model config must pass the **internal benchmark** (golden question sets, see "Evaluation strategy") before merge.
 
 ## Architecture
 One shared pipeline; per-teacher-and-subject data and configuration.
@@ -33,7 +33,7 @@ LMS (Moodle/Merlin, Teams, Classroom, …) ─► connector ─► CMP core
 
 ### Instruction layers (prompt assembly order, higher wins)
 1. **Platform rules** – fixed, not editable by teachers (rules 1–6 above).
-2. **Teacher persona** – structured fields (ti/Vi, answer length, help level for exercises, examples/analogies, language/terminology, out-of-scope topics, escalation rules) + one free-text field. Versioned; teacher previews before activation; activation reruns that subject's golden set and is blocked if grounding/abstention drops below threshold.
+2. **Teacher persona** – structured fields (ti/Vi, answer length, help level for exercises, examples/analogies, language/terminology, out-of-scope topics, escalation rules) + one free-text field. Versioned; teacher previews before activation; activation reruns that subject's **local check set** (auto-generated + collected questions, see "Evaluation strategy") and is blocked if grounding/abstention drops below threshold. Teachers never have to write test questions.
 3. **Student adaptation** – later phase, minimal.
 
 ## Model layer (LLM-agnostic, open models first)
@@ -45,6 +45,42 @@ LMS (Moodle/Merlin, Teams, Classroom, …) ─► connector ─► CMP core
 - Use only the OpenAI-compatible chat schema through LiteLLM. Prompts must work across models: no provider-specific tool formats or prompt syntax in the core. Provider-specific optimisations (e.g., prompt caching) only behind a config flag, with identical behaviour when off. (vLLM's automatic prefix caching needs no code.)
 - Keep system prompts and the platform-rule text model-neutral; if a model needs a variant, store it as a per-model override in config, never as `if model == ...` in code.
 - Every trace records the exact model id and config version, so results stay comparable across switches.
+
+## Evaluation strategy
+A test set is a **sample, not coverage**: 50–100 questions spread over a subject's material
+(lectures, scripts, exercises, file types) show whether the clone works, whether it has 200 or
+20,000 pages. Three kinds of test set, decided 2026-11-14:
+
+| Set | Material | Built by | Ships with CMP? | Purpose |
+|---|---|---|---|---|
+| **Internal benchmark** | pilot material used with permission | us | **no** — only the defaults it chooses | choose models, chunking, prompts, rerank/hybrid for everyone (rule 10) |
+| **Auto-generated check** | each installation's own | the system, at ingest | no, created locally | safety net per subject, persona activation gate |
+| **Collected real questions** | each installation's own | gathered during use | no, stays local | grows into each subject's real test set |
+
+- **Internal benchmark:** real student-style questions with person-checked answer slides (and
+  reference answers), across several subjects and material types (slide decks PDF/PPTX, text
+  and articles, scans, code-heavy, maths/formulas, tables) — the "golden middle", never tuned to
+  one subject. The material is someone else's: it **never goes into the repository** (`data/` is
+  git-ignored) and is never redistributed, because permission can be withdrawn. If it is, the
+  material is deleted; defaults already chosen stay. Today's only set
+  (`Suvremene_tehnike_programiranja`) is its first subject. One subject is not enough: v3/v4
+  differences were one or two questions trading places.
+- **Auto-generated check:** at ingest the `fast`/`answer` model picks slides spread over the
+  material and writes, for each, a question **phrased like a student** (casual, paraphrased,
+  sometimes English or without diacritics — otherwise it copies slide wording and scores look too
+  good). The slide it was written from is `expected_sources`; nobody marks anything. **No
+  model-written reference answers** (grading a model against a model's answer is circular):
+  answers are judged against the cited slide itself (grounding + does it answer the question).
+  Plus **generic abstention questions** that need no subject knowledge (deadlines, grades,
+  another subject) — the same for every subject. The teacher may delete bad questions; doing
+  nothing is fine.
+- **Collected real questions:** forwarded questions the teacher answers in the queue (the teacher
+  naturally points to the source, so a question + source comes from normal work) and answers
+  students mark 👎. They contain student text, so they stay inside the installation and are
+  minimised like any personal data (rule 9).
+- Teachers never have to write a test set. A hand-written set stays optional for teachers who
+  want one.
+- Local checks run on the institution's own server; nothing is sent to us.
 
 ## Traffic and scaling
 Two kinds of traffic, handled differently:
@@ -89,7 +125,7 @@ backend/
   migrations/     Alembic
   tests/
 frontend/         React + Vite + TS
-eval/             golden sets per subject (eval/sets/<subject>.yaml), eval runner, reports
+eval/             internal benchmark sets (eval/sets/<subject>.yaml), eval runner, reports (git-ignored)
 config/           models.yaml, settings
 infra/            docker-compose.dev.yml, docker-compose.prod.yml, proxy config
 backend/Dockerfile, frontend/Dockerfile   (multi-stage, pinned base images)
@@ -133,7 +169,7 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 
 ## Build order
 1. **Retrieval spike** (scripts, no UI): one real subject + 50–100 golden questions; parsing, chunking, embeddings, search; measure recall@5.
-2. **Answers:** model layer with roles + `models.yaml`, citations, abstention + teacher queue; compare 2–3 open models on the golden set.
+2. **Answers:** model layer with roles + `models.yaml`, citations, abstention + teacher queue; compare 2–3 open models on the internal benchmark. Auto-generated check sets (questions from slides, judged against the slide) can be built here too, since they need the `judge` role.
 3. **Product:** teacher persona settings, approval workflow, versioning, question queue, chat UI, direct upload.
 4. **Moodle connector** (local Moodle in Docker: LTI 1.3 + Web Services polling) → then SRCE/Merlin.
 5. Teams connector → Google Classroom connector.
@@ -292,7 +328,8 @@ Next:
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
    teacher, not a retrieval one.
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
-   and to confirm or drop the `--context` and hybrid-as-rerank-pool gains.
+   and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
+   material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Then step 2: pull the dev chat models, answer generation with citations, abstention
    (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
@@ -364,7 +401,8 @@ KB content is read/written only inside `core.db.kb_scope(kb_version_id)`.
 ## Open questions
 - Which open model wins the `answer` role (Qwen 3.5 vs Mistral Small 4 vs Gemma 4) — decided by golden-set results on Croatian material.
 - GPU hosting for the pilot: own hardware vs rented EU cloud GPU (one 24 GB GPU fits the ~30B class). Measure parallel conversations per GPU at acceptable latency.
-- `judge` role: an open model may be too weak to grade reliably. The golden set holds no personal data, so a stronger (possibly commercial) judge for evaluation only is an option — decide explicitly.
+- `judge` role: an open model may be too weak to grade reliably. The internal benchmark holds no personal data, so a stronger (possibly commercial) judge for it only is an option — decide explicitly. Local checks (collected real questions contain student text) must use a judge that runs inside the installation.
+- Whether to ship an optional **smoke test** with CMP: a small course written by us (owned by the project, so nothing to approve or revoke) with ~30 questions, to check that an installation or a swapped model works. Not decided; revisit later.
 - Whether the pilot institution accepts open models of non-EU origin (Qwen) when self-hosted in the EU.
 - Pilot institution, subject(s) and teacher(s); SRCE contact for Merlin.
 - Business model: who pays (institution licence is the working assumption).
