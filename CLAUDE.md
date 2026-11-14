@@ -269,6 +269,30 @@ Done:
     or two questions that trade places, so this golden set cannot tell prompt variants apart.
     Prompt tuning waits for more questions or a second subject. Ingest reports now record
     `prompt_version` (hash of the prompt) next to the model id.
+- **Teacher-written question set (2026-11-14):** the teacher's 62 oral-exam practice questions
+  (2016-17, docx in `data/.questions/`) are the first human-written questions. They are the
+  teacher's text, so the set lives in **`eval/sets/local/Suvremene_tehnike_programiranja.teacher.yaml`
+  (git-ignored, never committed)**, run with `--set`, questions grouped as `exam`.
+  `expected_sources` were marked by Claude from the slide text, a title index of every slide and
+  keyword search, **not only from search results** (that would bias the set toward the retriever
+  under test); not yet confirmed by the teacher. Many questions have several parts; their
+  sources cover all parts and a hit on any counts. Results (recall@5 / MRR, 62 questions):
+
+  | mode                  | v2          | v3              | v4          |
+  |-----------------------|-------------|-----------------|-------------|
+  | dense                 | 0.97 / 0.89 | 0.98 / 0.90     | 0.98 / 0.92 |
+  | dense + rerank 20     |             | 0.98 / 0.91     |             |
+  | hybrid                |             | 0.98 / 0.92     |             |
+  | hybrid + rerank 20    |             | **1.00 / 0.91** |             |
+
+  - Scores are high because exam questions use the course's own terms ("Enkapsulacija
+    (učahurivanje), što je?"): they behave like the easy set, not like casual student questions.
+    Their value is human wording and coverage of the whole course (all 14 lectures).
+  - The only miss is t02 ("Što čine naredbe javac, a što java? Objektni ili byte kod što je?"):
+    the answer is spread over 26/28/31 and "objektni" pulls in slides about objects (43, 53);
+    hybrid + rerank finds it.
+  - v3 hybrid + rerank 20 is the best mode on both sets. Unlike on the hard set, hybrid alone
+    does not hurt here (literal terms are what sparse matches well).
 - Timings on this CPU laptop (ThinkPad T14s Gen 6 AMD, no GPU; Ollama in Docker), for planning:
   - `--context` ingest of 758 chunks: **8,612 s (2 h 23 min)**, almost all of it the `context`
     step, ~10.8 s per chunk (qwen3.5 with thinking off; with thinking on it was ~150 s/chunk).
