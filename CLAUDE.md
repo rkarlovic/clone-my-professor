@@ -159,8 +159,9 @@ Done:
 - First subject `Suvremene_tehnike_programiranja` (1 PDF, 945 pages). Local DB (rebuilt on a new
   machine 2026-11-12, older versions are gone): v1 = 766 embedded chunks without duplicate
   folding; v2 = 758 embedded chunks, 67 parents, 8 duplicate pages folded; **v3 = current**,
-  same chunks as v2 plus a `context` sentence per chunk (`--context`). v2 and v3 also have sparse
-  vectors (`scripts.sparse`).
+  same chunks as v2 plus a `context` sentence per chunk (`--context`); v4 = a rejected context
+  prompt variant (see below), kept only for comparison. v2–v4 also have sparse vectors
+  (`scripts.sparse`).
 - Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
   the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
   to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
@@ -207,11 +208,29 @@ Done:
     slide 313 outrank 285/286; slide 285's context sentence mostly talks about static methods.
   - Abstain questions are still not separable by any score (v3 rerank: h24 0.85 because slide 480
     states the deadline; lowest answerable 0.0098 vs h22 0.074).
+  - **A stricter context prompt (v4) was tried and rejected.** It asked for what the slide states
+    (with English terms) plus one question a student would ask, guided by a short example from
+    an unrelated subject. The sentences read better and the questions often match student wording
+    (slide 742: "Kako spriječiti zamrzavanje grafičkog sučelja…"), but the scores did not improve:
+
+    | v4 mode               | easy MRR | hard recall@5 | hard MRR | hard misses           |
+    |-----------------------|----------|---------------|----------|-----------------------|
+    | dense                 | 0.94     | 0.84          | 0.71     | h06 h14 h17           |
+    | dense + rerank 20     | 0.98     | 0.89          | 0.77     | h11 h14               |
+    | hybrid                | 0.89     | 0.74          | 0.58     | h03 h09 h11 h14 h17 (+ easy e14) |
+    | hybrid + rerank 20    | 0.98     | 0.89          | 0.76     | h11 h12               |
+
+    Dense v4 is the first mode to fix h11, but loses h06 and h17. The old prompt stays. **Lesson:**
+    with 19 hard questions one question moves recall@5 by 0.05, and every v3/v4 difference is one
+    or two questions that trade places, so this golden set cannot tell prompt variants apart.
+    Prompt tuning waits for more questions or a second subject. Ingest reports now record
+    `prompt_version` (hash of the prompt) next to the model id.
 - Timings on this CPU laptop (ThinkPad T14s Gen 6 AMD, no GPU; Ollama in Docker), for planning:
   - `--context` ingest of 758 chunks: **8,612 s (2 h 23 min)**, almost all of it the `context`
     step, ~10.8 s per chunk (qwen3.5 with thinking off; with thinking on it was ~150 s/chunk).
     Parse is cached; dense embedding is a few minutes. Ingest reports now record per-step times
-    under `timings`, and eval reports their total `seconds`.
+    under `timings`, and eval reports their total `seconds`. The v4 prompt (longer answers):
+    9,188 s (2 h 33 min) = context 8,802 s (~11.6 s per chunk) + embedding 339 s + parse/store 7 s.
   - `scripts.sparse` backfill: 444 s for v2, 554 s for v3 (longer texts with context), ~0.6–0.7 s
     per chunk on CPU.
   - Golden-set eval (50 questions): dense 4 s; hybrid 25 s (incl. sparse model load); rerank 20
@@ -265,8 +284,8 @@ Decisions made in step 1:
 Next:
 1. Teacher reviews the golden set: `expected_sources` first, then reference answers, the
    `[review 2026-11-13]` notes and the h24/h25 decision.
-2. Retrieval experiments left (rerank, `--context` and hybrid done, see above): a tighter
-   `context` prompt; chunk size settings; h11. Slide 313 (outdated) is a content problem for the
+2. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
+   above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
    teacher, not a retrieval one.
 3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains.

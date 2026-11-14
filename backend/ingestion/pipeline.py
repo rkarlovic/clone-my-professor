@@ -106,7 +106,10 @@ def ingest_subject(source_dir: Path, options: IngestOptions | None = None) -> In
 
     models = {"embedding": trace_metadata("embedding")}
     if options.with_context:
-        models["context"] = trace_metadata("context")
+        from ingestion.context import prompt_version
+
+        # The prompt shapes the context as much as the model does: record both.
+        models["context"] = trace_metadata("context") | {"prompt_version": prompt_version()}
     report = IngestReport(subject, str(version_id), version_no, asdict(options), models)
     log.info("subject %s -> kb_version %s (v%d)", subject, version_id, version_no)
 
