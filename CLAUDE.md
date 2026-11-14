@@ -161,7 +161,8 @@ Done:
   folding; v2 = 758 embedded chunks, 67 parents, 8 duplicate pages folded; **v3 = current**,
   same chunks as v2 plus a `context` sentence per chunk (`--context`); v4 = a rejected context
   prompt variant (see below), kept only for comparison. v2–v4 also have sparse vectors
-  (`scripts.sparse`).
+  (`scripts.sparse`). `ask`/`evaluate` default to the newest version (v4), so pass
+  `--version 3` for the current best.
 - Golden set `eval/sets/Suvremene_tehnike_programiranja.yaml`: 50 questions — 25 easy (worded like
   the slides), 25 hard (paraphrases etc.), of which 6 are out_of_scope/admin and must be forwarded
   to the teacher. **Draft written by Claude from the slide text; not yet reviewed by the teacher.**
@@ -199,7 +200,7 @@ Done:
   - **`--context` helps**: it fixes h03 (the "zamrzne" wording gap) and h09 (English question),
     because the sentence says what a slide is about in other words. It costs easy MRR in dense
     search (1.00 → 0.92), which reranking restores. The sentences are wordy (most end with
-    "Materijal se direktno uklapa u temu…"); a tighter `context` prompt is worth a try.
+    "Materijal se direktno uklapa u temu…"); a tighter prompt was tried as v4 and rejected (below).
   - **Sparse as an equal partner in rank fusion hurts** (v2 0.84 → 0.68, v3 0.89 → 0.79): literal
     token overlap pulls in slides that share words but not meaning. As a **candidate pool for the
     reranker** it helps by one question: h14's slide 378 is in the fused top 20 but not the dense
