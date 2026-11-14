@@ -171,6 +171,15 @@ Done:
   questions' top scores (0.47–0.64) overlap the weakest answerable top score (0.50).
 - Duplicate folding (v2) left the scores unchanged: in v1 only e16 had two copies of one slide
   in its top 5, and it was already a hit. It frees top-5 slots and makes citations complete.
+- `--rerank 20` on v2 (2026-11-14): recall@5 unchanged (1.00 easy / 0.84 hard), MRR easy
+  1.00 → 0.98, hard 0.60 → **0.68**. It fixes h09 (278, dense rank 8, → 1) and moves h06, h08,
+  h17 to rank 1, but **breaks h11**: the reranker puts slide 57 first (0.70), a code-style
+  slide whose snippet literally contains "Interface1" and "// tijelo", and ranks outdated slide
+  313 above the real answers 285/286 (0.03 vs 0.005), so the clone would answer h11 wrongly.
+  Rerank scores do not separate abstain questions either (h22 0.035 vs answerable h18 0.0016;
+  h24 0.78 because slide 480 does state the deadline). Cost on this CPU laptop: ~24 s per
+  question (1,000 pairs in 20 min) — fine for evaluation, not for live chat without a GPU.
+  **Not made the default**: the gain is real but it trades one miss for another.
 
 Decisions made in step 1:
 - Chunking: one chunk per slide; repeated boilerplate slides dropped (seen ≥ 3×); slides under
@@ -213,9 +222,11 @@ Decisions made in step 1:
 Next:
 1. Teacher reviews the golden set: `expected_sources` first, then reference answers, the
    `[review 2026-11-13]` notes and the h24/h25 decision.
-2. Retrieval experiments, each measured with `scripts.evaluate`: `--rerank 20` (cheapest; h09's
-   slide 281 is probably just outside the top 5); sparse/hybrid (BGE-M3 sparse; h03 is a wording
-   gap); `--context` ingest (slow on CPU); chunk size settings. Target the hard misses.
+2. Retrieval experiments, each measured with `scripts.evaluate` (`--rerank 20` done, see
+   above): sparse/hybrid (BGE-M3 sparse; h03 is a wording gap, h09 an English question on
+   Croatian slides); `--context` ingest (slow on CPU), which may also help the reranker see what
+   a slide is about rather than its literal words (h11); chunk size settings. Target the hard
+   misses. Slide 313 (outdated) is a content problem for the teacher, not a retrieval one.
 3. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation).
 4. Then step 2: pull the dev chat models, answer generation with citations, abstention
    (threshold + `fast` check) and teacher queue, `eval.run` for grounding/abstention.
