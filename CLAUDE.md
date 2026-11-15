@@ -515,6 +515,23 @@ Decisions made in step 1:
     still had the slides). No good answer forwarded. Judge grounded easy 0.80 (0.96 last run;
     e16 says Java boxes to `System.Object`, a real slip mixing C#; others look like judge noise),
     hard 0.59. Run-to-run variance of one or two questions is normal on this set.
+- **Scope check sweep, all 110 questions (golden + teacher), 4B `fast` (2026-11-15)**, ~10–13 s
+  per question with model reload (19–24 min per sweep):
+  - Current prompt: 3 wrong labels: h21 (JDBC) and h22 (Stream API) GRADIVO (both still
+    forwarded later), and **t04 "C++ i Java-a u čemu se razlikuju?" DRUGO: a teacher's exam
+    question wrongly forwarded** ("drugi programski jezik" in the DRUGO line).
+  - Topic first ("TEMA: <lecture> or nijedna", then the label): worse, 4 wrong (h20–h23 all
+    GRADIVO). The 4B writes "TEMA: nijedna" correctly for Flask/JDBC/Spring, then labels them
+    GRADIVO anyway; and it writes "nijedna" for ~33 in-course questions too (e04, h01, t36
+    upcast/downcast…), so code cannot decide from that line either. Lecture titles are too coarse
+    for the 4B to map questions onto. Rejected.
+  - One added line "a comparison of a course language/technology with another one is GRADIVO":
+    t04 still DRUGO, JDBC still GRADIVO. Reverted.
+  - **Conclusion: prompt wording for the 4B does not move these labels.** h21 is forwarded anyway
+    (`no_source`), so its only cost is ~60 s and the reason label. The real problem is DRUGO
+    forwarding a valid question (t04) with no later check. Options: DRUGO does not forward on its
+    own (answer pipeline decides, as for h21); give the check slide-level evidence (top slide
+    titles) instead of lecture titles; or a stronger `fast` model on vLLM.
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -529,8 +546,9 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A (prompt fixes and the live answer check done, see above): JDBC/databases
-   still GRADIVO (h21); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
+3. Step 2 part A (prompt fixes and the live answer check done, see above): the scope check
+   wrongly forwards t04 as DRUGO and labels h21 GRADIVO (prompt wording does not help, see the
+   sweep above; decide how DRUGO forwards); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
