@@ -53,6 +53,8 @@ FORWARD_MESSAGES = {
 # contradiction does: on the first subject the dev 9B said PROTURJEČI=DA only for wrong answers,
 # while ODGOVARA=NE also hit good answers (its own summary agreed with the answer) and IZVAN=DA
 # hit most answers that end with "materijali ne pokrivaju…". Both are kept on the trace.
+# ODGOVARA=NE stops an answer only when it is mostly a refusal (`is_mostly_refusal`): h22's
+# one-sentence "the sources mention stream(), filter/map are not described" with five citations.
 CHECK_FORWARD = {"PROTURJEČI": True}
 CHECK_LABELS = ["ODGOVARA", "PROTURJEČI", "IZVAN"]
 SCOPE_LABELS = {"GRADIVO": None, "ADMIN": ForwardReason.admin, "DRUGO": ForwardReason.out_of_scope}
@@ -72,7 +74,7 @@ ADMIN_TERMS = re.compile(
 _REFUSAL_SOURCE = re.compile(r"\b(izvor\w*|materijal\w*)", re.IGNORECASE)
 _REFUSAL_VERB = re.compile(
     r"\b(ne nalazi\w*|ne nalazim|ne sadrž\w*|ne pokriva\w*|ne spominj\w*|ne objašnjava\w*|"
-    r"nije opisan\w*|nema\w* (informacij\w*|odgovor\w*|opis\w*))",
+    r"(nije|nisu) (opisan\w*|objašnjen\w*)|nema\w* (informacij\w*|odgovor\w*|opis\w*))",
     re.IGNORECASE,
 )
 MAX_SOURCE_CHARS = 4000  # per source; a parent section can be several slides long
@@ -175,7 +177,7 @@ def answer_question(
     started = time.time()
     result.check = answer_check(question, text, cited)
     result.seconds["check"] = round(time.time() - started, 1)
-    if check_fails(result.check):
+    if check_fails(result.check, text):
         return _forward(result, ForwardReason.failed_check)
     return result
 
@@ -212,10 +214,13 @@ def parse_verdicts(reply: str, labels: list[str]) -> dict[str, bool | None]:
     return out
 
 
-def check_fails(verdicts: dict[str, bool | None]) -> bool:
+def check_fails(verdicts: dict[str, bool | None], text: str = "") -> bool:
     """True when a verdict stops the answer. An unreadable verdict does not: the citation check
-    has already passed, and forwarding every unclear reply would hide good answers."""
-    return any(verdicts.get(label) is bad for label, bad in CHECK_FORWARD.items())
+    has already passed, and forwarding every unclear reply would hide good answers. ODGOVARA=NE
+    stops it only when the answer is mostly a refusal (the check alone also hit good answers)."""
+    if any(verdicts.get(label) is bad for label, bad in CHECK_FORWARD.items()):
+        return True
+    return verdicts.get("ODGOVARA") is False and is_mostly_refusal(text)
 
 
 def scope_check(subject: str, topics: list[str], question: str) -> tuple[str, ForwardReason | None]:
@@ -291,6 +296,16 @@ def is_prose_refusal(raw: str) -> bool:
     first sentence counts, so a closing "ostatak materijali ne pokrivaju" (rule 4) is fine."""
     first = re.split(r"(?<=[.!?])\s|\n", raw.strip(), maxsplit=1)[0]
     return bool(_REFUSAL_SOURCE.search(first) and _REFUSAL_VERB.search(first))
+
+
+def is_mostly_refusal(raw: str) -> bool:
+    """At least half of the reply's sentences say the sources do not cover the question: it
+    cites sources only to say they lack the answer. A good answer with rule 4's one closing
+    sentence ("materijali ne pokrivaju…") has 1 such sentence in 3 or more."""
+    text = _CITATION.sub("", raw)
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+|\n+", text.strip()) if len(s.split()) > 2]
+    refusals = sum(1 for s in sentences if _REFUSAL_SOURCE.search(s) and _REFUSAL_VERB.search(s))
+    return refusals > 0 and 2 * refusals >= len(sentences)
 
 
 def _forward(result: Answer, reason: ForwardReason) -> Answer:

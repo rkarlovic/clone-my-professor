@@ -10,6 +10,7 @@ from core.answer import (
     build_sources,
     check_citations,
     check_fails,
+    is_mostly_refusal,
     is_prose_refusal,
     parse_verdicts,
     scope_check,
@@ -181,3 +182,28 @@ def test_parse_verdicts() -> None:
 )
 def test_check_fails(verdicts: dict, fails: bool) -> None:
     assert check_fails(verdicts) is fails
+
+
+H22 = (
+    "Stream API se u kontekstu prikazanih izvora spominje kao način za dohvat sadržaja ZIP "
+    "datoteke metodom `stream()`, ali primjeri poput `.filter(...).map(...)` nisu opisani u "
+    "materijalima [1][2][3][4][5]."
+)
+GOOD_WITH_NOTE = (
+    "Downcast je moguć samo ako objekt stvarno jest podklasa [1]. Inače nastaje "
+    "ClassCastException [1]. Provjera se radi operatorom instanceof [2]. "
+    "Materijali ne pokrivaju detalje o vašem konkretnom kodu."
+)
+NO = {"ODGOVARA": False, "PROTURJEČI": False, "IZVAN": True}
+
+
+def test_mostly_refusal_forwards_when_the_check_says_it_does_not_answer() -> None:
+    assert is_mostly_refusal(H22)
+    assert check_fails(NO, H22)
+    assert not check_fails({**NO, "ODGOVARA": True}, H22)  # the check alone decides nothing
+    assert not check_fails({**NO, "ODGOVARA": None}, H22)
+
+
+def test_answer_with_closing_note_is_not_mostly_refusal() -> None:
+    assert not is_mostly_refusal(GOOD_WITH_NOTE)
+    assert not check_fails(NO, GOOD_WITH_NOTE)  # h03/h06/h13 had ODGOVARA=NE like this

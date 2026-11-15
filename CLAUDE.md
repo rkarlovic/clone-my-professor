@@ -498,9 +498,15 @@ Decisions made in step 1:
     sentence: the sources mention `stream()` for ZIP entries, `filter`/`map` are not described,
     citing all five sources). Check verdict ODGOVARA=NE, PROTURJEČI=NE, so the final rule lets it
     through. Harmless (no outside knowledge) but not a forward; hard judge grounded 0.59 (noisy).
-  - h22 is not covered by the check (only `ODGOVARA` caught it); it depends on the answer model
-    saying `NE_ZNAM`, which it did in 2 of 4 full runs. Its prose version says honestly that the
-    course does not explain `filter`/`map`, without outside knowledge.
+  - **h22 fix (2026-11-15): `is_mostly_refusal`.** `ODGOVARA=NE` now forwards (`failed_check`)
+    when at least half of the answer's sentences say the sources/materials do not cover it
+    (same izvor/materijal + negation words as `is_prose_refusal`, plus "nisu opisani/objašnjeni";
+    citations stripped, fragments under 3 words ignored). h22's prose answers are one sentence,
+    or one example sentence + one refusal; good answers that ODGOVARA=NE hit (h03, h06, h13)
+    have one closing "materijali ne pokrivaju…" in 4–5 sentences. Applied to all 183 stored
+    answers (verdicts replayed where a run had none): forwards h22 in all three prose versions
+    and h11 (PROTURJEČI), no good answer; e11 (2 sentences, one a closing note) has ODGOVARA=DA.
+    Not yet confirmed by a full run. Croatian word lists, like `ADMIN_TERMS`.
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -516,9 +522,8 @@ Next:
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): JDBC/databases
-   still GRADIVO (h21); h22 relies on the answer model's `NE_ZNAM` (answered in prose in the final-rule
-   run; an answer that cites sources only to say they don't cover the question should forward);
-   a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
+   still GRADIVO (h21); h22's prose answers now forward via `is_mostly_refusal` (replayed only, no full run
+   yet); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
