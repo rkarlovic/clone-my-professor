@@ -506,7 +506,15 @@ Decisions made in step 1:
     have one closing "materijali ne pokrivaju…" in 4–5 sentences. Applied to all 183 stored
     answers (verdicts replayed where a run had none): forwards h22 in all three prose versions
     and h11 (PROTURJEČI), no good answer; e11 (2 sentences, one a closing note) has ODGOVARA=DA.
-    Not yet confirmed by a full run. Croatian word lists, like `ADMIN_TERMS`.
+    Croatian word lists, like `ADMIN_TERMS`.
+  - **Full run with the h22 fix** (50 questions, **6,692 s (112 min)**, no errors): abstain
+    **6/6 forwarded** for the first time with the final rule (h22 `failed_check`: ODGOVARA=NE
+    on a mostly-refusal answer); easy 1.00 / 1.00; hard answered 0.89, cites expected **0.84**
+    (misses h11 `failed_check`, h14 `no_source`, and h03 answered citing only 784
+    (`invokeLater`) instead of 636/744: answer-model variation at temperature 0.2, retrieval
+    still had the slides). No good answer forwarded. Judge grounded easy 0.80 (0.96 last run;
+    e16 says Java boxes to `System.Object`, a real slip mixing C#; others look like judge noise),
+    hard 0.59. Run-to-run variance of one or two questions is normal on this set.
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -522,8 +530,8 @@ Next:
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): JDBC/databases
-   still GRADIVO (h21); h22's prose answers now forward via `is_mostly_refusal` (replayed only, no full run
-   yet); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
+   still GRADIVO (h21); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
+   the full run); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
