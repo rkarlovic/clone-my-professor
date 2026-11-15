@@ -490,8 +490,16 @@ Decisions made in step 1:
     Hard misses: h14 (retrieval missed 378, forwarded `no_source`) and h11 (forwarded by the
     check: retrieval misses 285/286, and the answer said "Da" against slide 313). Judge numbers
     from that run (easy grounded 0.92; hard 0.79 over the 14 it judged) are still rough.
+  - **Full run with the final rule** (config `dev-2026-11-15.1`, 50 questions in **6,616 s
+    (110 min)**, no errors) matches the replay exactly: easy 1.00 / 1.00 (grounded 0.96), hard
+    answered and cites expected slide **0.89 / 0.89**, misses only h14 (`no_source`) and h11
+    (`failed_check`, PROTURJEČI=DA). No good answer was forwarded by the check. Abstain **5/6**:
+    h20/h23 `out_of_scope`, h24/h25 `admin`, h21 `no_source`; **h22 answered** in prose (one
+    sentence: the sources mention `stream()` for ZIP entries, `filter`/`map` are not described,
+    citing all five sources). Check verdict ODGOVARA=NE, PROTURJEČI=NE, so the final rule lets it
+    through. Harmless (no outside knowledge) but not a forward; hard judge grounded 0.59 (noisy).
   - h22 is not covered by the check (only `ODGOVARA` caught it); it depends on the answer model
-    saying `NE_ZNAM`, which it did in 2 of 3 full runs. Its prose version says honestly that the
+    saying `NE_ZNAM`, which it did in 2 of 4 full runs. Its prose version says honestly that the
     course does not explain `filter`/`map`, without outside knowledge.
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
@@ -508,8 +516,8 @@ Next:
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): JDBC/databases
-   still GRADIVO (h21); h22 relies on the answer model's `NE_ZNAM`; a full run with the final
-   check rule (only replayed so far);
+   still GRADIVO (h21); h22 relies on the answer model's `NE_ZNAM` (answered in prose in the final-rule
+   run; an answer that cites sources only to say they don't cover the question should forward);
    a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
