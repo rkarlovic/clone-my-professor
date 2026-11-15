@@ -79,7 +79,7 @@ ADMIN_TERMS = re.compile(
 _REFUSAL_SOURCE = re.compile(r"\b(izvor\w*|materijal\w*)", re.IGNORECASE)
 _REFUSAL_VERB = re.compile(
     r"\b(ne nalazi\w*|ne nalazim|ne sadrž\w*|ne pokriva\w*|ne spominj\w*|ne objašnjava\w*|"
-    r"(nije|nisu) (opisan\w*|objašnjen\w*)|nema\w* (informacij\w*|odgovor\w*|opis\w*))",
+    r"ne opisuj\w*|ne navod\w*|(nije|nisu) (opisan\w*|objašnjen\w*)|nema\w* (informacij\w*|odgovor\w*|opis\w*))",
     re.IGNORECASE,
 )
 MAX_SOURCE_CHARS = 4000  # per source; a parent section can be several slides long

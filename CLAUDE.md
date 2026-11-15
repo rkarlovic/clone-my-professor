@@ -541,11 +541,20 @@ Decisions made in step 1:
   `no_source` as before (its label is GRADIVO). The safety for off-topic questions now rests on
   the answer model's `NE_ZNAM`, the citation check and the answer check, as it already did for
   every question the scope check labels GRADIVO.
+- **Teacher's 60 questions, full answer run (2026-11-15)**, v3 dense k=5, `--judge`, all rules
+  above, **9,993 s (2 h 47 min)**, no errors: answered **0.98**, cites expected slide **0.98**,
+  judge grounded 0.88, on topic 0.98. Only miss t02 (javac/java, retrieval; `no_source`, the
+  known dense miss). t04 labelled DRUGO and answered correctly. The check said ODGOVARA=NE only
+  for **t25** (composition vs aggregation, UML): 3 sentences, two of them "izvori ne navode…",
+  "materijali ne opisuju…", verbs the refusal list lacked, so it reached the student as a
+  mostly-refusal. Added "ne navod-", "ne opisuj-"; replayed on every stored answer (golden runs
+  + this one) it forwards t25 and nothing else new. Exam questions use the course's own terms,
+  so these numbers behave like the easy set (see step 1).
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
-  check and `--judge`, ~2 h 10 min for the
+  check and `--judge`, ~2 h 50 min for the
   teacher's 60, and ~40 s more per question with hybrid + rerank 20.
 
 Next:
@@ -556,8 +565,7 @@ Next:
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
-   forwards alone (t04 fixed); a full golden + teacher run to confirm no off-topic answer gets
-   through; h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
+   forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set

@@ -234,3 +234,12 @@ def test_drugo_names_the_reason_of_a_later_forward(monkeypatch: pytest.MonkeyPat
 def test_admin_label_still_forwards_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
     result = _pipeline(monkeypatch, "ADMIN", "Java nema pokazivače [1].")
     assert result.forwarded is ForwardReason.admin and result.raw is None
+
+
+def test_refusal_with_navode_and_opisuju_is_mostly_refusal() -> None:
+    t25 = (
+        "Materijali pokrivaju definiciju kompozicije i agregacije [2]. Međutim, izvori ne navode "
+        "točne razlike između ova dva pojma.\n\nTakođer, materijali ne opisuju što će se dogoditi "
+        "s objektom B ako se obriše objekt A [2]."
+    )
+    assert is_mostly_refusal(t25) and check_fails(NO, t25)
