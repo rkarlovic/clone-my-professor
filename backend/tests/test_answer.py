@@ -207,3 +207,30 @@ def test_mostly_refusal_forwards_when_the_check_says_it_does_not_answer() -> Non
 def test_answer_with_closing_note_is_not_mostly_refusal() -> None:
     assert not is_mostly_refusal(GOOD_WITH_NOTE)
     assert not check_fails(NO, GOOD_WITH_NOTE)  # h03/h06/h13 had ODGOVARA=NE like this
+
+
+def _pipeline(monkeypatch: pytest.MonkeyPatch, scope: str, answer_reply: str) -> answer.Answer:
+    """answer_question with stubbed DB and models: scope label, then the answer model's reply."""
+    monkeypatch.setattr(answer, "_subject", lambda kb: ("Predmet", ["Tema"]))
+    monkeypatch.setattr(answer, "search", lambda *a, **kw: [_hit(1)])  # score 1.0, over the floor
+    replies = {"fast": scope, "answer": answer_reply}
+    monkeypatch.setattr(answer, "complete", lambda role, messages: replies[role])
+    monkeypatch.setattr(answer, "answer_check", lambda q, t, c: {"ODGOVARA": True})
+    return answer.answer_question(uuid.uuid4(), "C++ i Java-a u čemu se razlikuju?")
+
+
+def test_drugo_alone_does_not_forward(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = _pipeline(monkeypatch, "DRUGO", "Java nema pokazivače [1].")
+    assert result.scope == "DRUGO" and result.forwarded is None
+    assert result.text == "Java nema pokazivače [1]."
+
+
+def test_drugo_names_the_reason_of_a_later_forward(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = _pipeline(monkeypatch, "DRUGO", DONT_KNOW)
+    assert result.forwarded is ForwardReason.out_of_scope
+    assert _pipeline(monkeypatch, "GRADIVO", DONT_KNOW).forwarded is ForwardReason.no_source
+
+
+def test_admin_label_still_forwards_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = _pipeline(monkeypatch, "ADMIN", "Java nema pokazivače [1].")
+    assert result.forwarded is ForwardReason.admin and result.raw is None

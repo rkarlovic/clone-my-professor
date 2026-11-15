@@ -532,6 +532,15 @@ Decisions made in step 1:
     forwarding a valid question (t04) with no later check. Options: DRUGO does not forward on its
     own (answer pipeline decides, as for h21); give the check slide-level evidence (top slide
     titles) instead of lecture titles; or a stronger `fast` model on vLLM.
+- **DRUGO no longer forwards on its own (2026-11-15).** Only ADMIN (model or `ADMIN_TERMS`)
+  forwards before retrieval (`SCOPE_FORWARDS_AT_ONCE`); a DRUGO question goes through retrieval,
+  the answer model and both checks, and if any of them forwards it, the reason is
+  `out_of_scope` (the label is kept as the reason, and on the trace). Live check: **t04 answered**
+  from 29/176/264 (expected slides, check ODGOVARA=DA); h20 and h23 still forwarded
+  `out_of_scope` (the answer model said `NE_ZNAM`), now after ~60 s instead of ~12 s; h21
+  `no_source` as before (its label is GRADIVO). The safety for off-topic questions now rests on
+  the answer model's `NE_ZNAM`, the citation check and the answer check, as it already did for
+  every question the scope check labels GRADIVO.
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -546,9 +555,9 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A (prompt fixes and the live answer check done, see above): the scope check
-   wrongly forwards t04 as DRUGO and labels h21 GRADIVO (prompt wording does not help, see the
-   sweep above; decide how DRUGO forwards); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
+3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
+   forwards alone (t04 fixed); a full golden + teacher run to confirm no off-topic answer gets
+   through; h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set

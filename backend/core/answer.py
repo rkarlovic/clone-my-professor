@@ -58,6 +58,11 @@ FORWARD_MESSAGES = {
 CHECK_FORWARD = {"PROTURJEČI": True}
 CHECK_LABELS = ["ODGOVARA", "PROTURJEČI", "IZVAN"]
 SCOPE_LABELS = {"GRADIVO": None, "ADMIN": ForwardReason.admin, "DRUGO": ForwardReason.out_of_scope}
+# Scope reasons that forward before retrieval. DRUGO does not: on the first subject the 4B
+# labelled a teacher's exam question ("C++ i Java-a u čemu se razlikuju?") DRUGO, and no
+# prompt wording changed that. A DRUGO question goes through retrieval and the answer checks
+# like any other; if one of them forwards it, the reason is `out_of_scope`.
+SCOPE_FORWARDS_AT_ONCE = {ForwardReason.admin}
 # Safety net for rule 2, independent of the model: words that in a student's question mean
 # grades, points or deadlines. Kept to unmistakable ones (not "ispit", "upis", "prolaz", which
 # are also programming words). Croatian, the platform language; other languages add theirs.
@@ -143,15 +148,18 @@ def answer_question(
     started = time.time()
     result.scope, reason = scope_check(subject, topics, question)
     result.seconds["scope"] = round(time.time() - started, 1)
-    if reason:
+    if reason in SCOPE_FORWARDS_AT_ONCE:
         return _forward(result, reason)
+
+    def forward(later: ForwardReason) -> Answer:
+        return _forward(result, reason or later)  # a DRUGO label names the reason
 
     started = time.time()
     hits = search(kb_version_id, question, k, rerank_candidates=rerank_candidates, hybrid=hybrid)
     result.seconds["retrieval"] = round(time.time() - started, 1)
     floor = _score_floor(rerank_candidates, hybrid)
     if not hits or (floor is not None and hits[0].score < floor):
-        return _forward(result, ForwardReason.low_score)
+        return forward(ForwardReason.low_score)
     result.sources = build_sources(hits)
 
     system = prompt("answer_system", "answer").format(subject=subject)
@@ -169,7 +177,7 @@ def answer_question(
 
     text, cited = check_citations(result.raw, result.sources)
     if text is None:
-        return _forward(result, ForwardReason.no_source)
+        return forward(ForwardReason.no_source)
     result.text, result.cited = text, cited
     if not check:
         return result
@@ -178,7 +186,7 @@ def answer_question(
     result.check = answer_check(question, text, cited)
     result.seconds["check"] = round(time.time() - started, 1)
     if check_fails(result.check, text):
-        return _forward(result, ForwardReason.failed_check)
+        return forward(ForwardReason.failed_check)
     return result
 
 
@@ -224,7 +232,8 @@ def check_fails(verdicts: dict[str, bool | None], text: str = "") -> bool:
 
 
 def scope_check(subject: str, topics: list[str], question: str) -> tuple[str, ForwardReason | None]:
-    """The `fast` role's label for the question and the forward reason it implies. An unclear
+    """The `fast` role's label for the question and the forward reason it implies (see
+    `SCOPE_FORWARDS_AT_ONCE` for which one stops the question at once). An unclear
     reply lets the question through: retrieval and the citation check still guard the answer.
     Questions with an unmistakable admin word are forwarded without asking the model."""
     if ADMIN_TERMS.search(question):
