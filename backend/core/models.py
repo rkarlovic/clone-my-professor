@@ -45,6 +45,7 @@ class ForwardReason(enum.StrEnum):
     out_of_scope = "out_of_scope"  # not about this subject
     low_score = "low_score"  # nothing retrieved above the score floor
     no_source = "no_source"  # the model found no answer in the sources, or cited none
+    failed_check = "failed_check"  # the `check` role found the answer off-target or contradictory
 
 
 class TeacherQuestionStatus(enum.StrEnum):

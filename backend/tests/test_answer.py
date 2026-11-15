@@ -5,7 +5,15 @@ import uuid
 import pytest
 
 import core.answer as answer
-from core.answer import Source, build_sources, check_citations, is_prose_refusal, scope_check
+from core.answer import (
+    Source,
+    build_sources,
+    check_citations,
+    check_fails,
+    is_prose_refusal,
+    parse_verdicts,
+    scope_check,
+)
 from core.models import ForwardReason
 from core.settings import REPO_ROOT
 from llm.config import load_model_config
@@ -150,3 +158,26 @@ def test_prose_refusal_is_forwarded(raw: str) -> None:
 )
 def test_normal_answer_is_not_a_refusal(raw: str) -> None:
     assert not is_prose_refusal(raw)
+
+
+def test_parse_verdicts() -> None:
+    reply = "ODGOVARA: DA\n**PROTURJEČI**: NE\nIZVAN - da"
+    assert parse_verdicts(reply, ["ODGOVARA", "PROTURJEČI", "IZVAN"]) == {
+        "ODGOVARA": True,
+        "PROTURJEČI": False,
+        "IZVAN": True,
+    }
+    assert parse_verdicts("ne znam", ["ODGOVARA"]) == {"ODGOVARA": None}
+
+
+@pytest.mark.parametrize(
+    ("verdicts", "fails"),
+    [
+        ({"ODGOVARA": True, "PROTURJEČI": False, "IZVAN": True}, False),  # IZVAN alone: no
+        ({"ODGOVARA": False, "PROTURJEČI": False, "IZVAN": True}, False),  # recorded only
+        ({"ODGOVARA": True, "PROTURJEČI": True, "IZVAN": False}, True),
+        ({"ODGOVARA": None, "PROTURJEČI": None, "IZVAN": None}, False),  # unreadable: let through
+    ],
+)
+def test_check_fails(verdicts: dict, fails: bool) -> None:
+    assert check_fails(verdicts) is fails

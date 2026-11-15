@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 
 from core.settings import get_settings
 
-Role = Literal["answer", "fast", "context", "vision", "judge", "embedding", "reranker", "sparse"]
+Role = Literal[
+    "answer", "fast", "check", "context", "vision", "judge", "embedding", "reranker", "sparse"
+]
 _ENV_PREFIX = "os.environ/"
 
 

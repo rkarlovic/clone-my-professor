@@ -1,6 +1,7 @@
 """Answer a student's question from one kb_version, or forward it to the teacher.
 
-    scope check (`fast`) -> retrieval -> score floor -> grounded answer (`answer`) -> citation check
+    scope check (`fast`) -> retrieval -> score floor -> grounded answer (`answer`)
+    -> citation check -> answer check (`check`)
 
 Rules (CLAUDE.md): answers come only from the version's sources and cite them (1); anything the
 clone cannot ground, and every admin question, is forwarded (2); retrieval is scoped to the
@@ -43,7 +44,17 @@ FORWARD_MESSAGES = {
         "U materijalima kolegija ne nalazim pouzdan odgovor na to pitanje. "
         "Pitanje je proslijeđeno nastavniku."
     ),
+    ForwardReason.failed_check: (
+        "U materijalima kolegija ne nalazim pouzdan odgovor na to pitanje. "
+        "Pitanje je proslijeđeno nastavniku."
+    ),
 }
+# Verdicts of the `check` role that stop an answer (label -> the value that fails). Only a
+# contradiction does: on the first subject the dev 9B said PROTURJEČI=DA only for wrong answers,
+# while ODGOVARA=NE also hit good answers (its own summary agreed with the answer) and IZVAN=DA
+# hit most answers that end with "materijali ne pokrivaju…". Both are kept on the trace.
+CHECK_FORWARD = {"PROTURJEČI": True}
+CHECK_LABELS = ["ODGOVARA", "PROTURJEČI", "IZVAN"]
 SCOPE_LABELS = {"GRADIVO": None, "ADMIN": ForwardReason.admin, "DRUGO": ForwardReason.out_of_scope}
 # Safety net for rule 2, independent of the model: words that in a student's question mean
 # grades, points or deadlines. Kept to unmistakable ones (not "ispit", "upis", "prolaz", which
@@ -94,6 +105,7 @@ class Answer:
     cited: list[Source] = field(default_factory=list)  # what the answer cites
     raw: str | None = None  # model output before the citation check
     scope: str | None = None  # the scope check's label
+    check: dict[str, bool | None] = field(default_factory=dict)  # the answer check's verdicts
     trace: dict = field(default_factory=dict)
     seconds: dict[str, float] = field(default_factory=dict)
 
@@ -107,6 +119,7 @@ def answer_question(
     hybrid: bool = False,
     persona_text: str | None = None,
     persona_version: int | None = None,
+    check: bool = True,
 ) -> Answer:
     cfg = get_model_config()
     subject, topics = _subject(kb_version_id)
@@ -115,11 +128,13 @@ def answer_question(
         "kb_version_id": str(kb_version_id),
         "persona_version": persona_version,
         "model_config_version": cfg.version,
-        "models": {"fast": trace_metadata("fast"), "answer": trace_metadata("answer")},
+        "models": {"fast": trace_metadata("fast"), "answer": trace_metadata("answer")}
+        | ({"check": trace_metadata("check")} if check else {}),
         "prompt_version": prompt_version(
             ["answer_system", "persona_header", "answer_user"], "answer"
         ),
         "scope_prompt_version": prompt_version(["scope_check"], "fast"),
+        "check_prompt_version": prompt_version(["answer_check"], "check") if check else None,
         "retrieval": {"k": k, "rerank_candidates": rerank_candidates, "hybrid": hybrid},
     }
 
@@ -154,7 +169,53 @@ def answer_question(
     if text is None:
         return _forward(result, ForwardReason.no_source)
     result.text, result.cited = text, cited
+    if not check:
+        return result
+
+    started = time.time()
+    result.check = answer_check(question, text, cited)
+    result.seconds["check"] = round(time.time() - started, 1)
+    if check_fails(result.check):
+        return _forward(result, ForwardReason.failed_check)
     return result
+
+
+def answer_check(question: str, text: str, cited: list[Source]) -> dict[str, bool | None]:
+    """The `check` role's verdicts on an answer, judged against the sources it cites."""
+    reply = complete(
+        "check",
+        [
+            {
+                "role": "user",
+                "content": prompt("answer_check", "check").format(
+                    sources="\n\n".join(f"[{s.n}] ({s.citation})\n{s.text}" for s in cited),
+                    question=question,
+                    answer=text,
+                ),
+            }
+        ],
+    )
+    return parse_verdicts(reply, CHECK_LABELS)
+
+
+def parse_verdicts(reply: str, labels: list[str]) -> dict[str, bool | None]:
+    """DA/NE per label; None when the reply has no readable verdict for it. A reply of bare
+    DA/NE lines, one per label in order (seen from the 9B), is read by position."""
+    upper = reply.upper()
+    out: dict[str, bool | None] = {}
+    for label in labels:
+        m = re.search(rf"{label}\W*(DA|NE)\b", upper)
+        out[label] = None if not m else m.group(1) == "DA"
+    bare = re.findall(r"^\W*(DA|NE)\W*$", upper, re.MULTILINE)
+    if all(v is None for v in out.values()) and len(bare) == len(labels):
+        out = {label: v == "DA" for label, v in zip(labels, bare, strict=True)}
+    return out
+
+
+def check_fails(verdicts: dict[str, bool | None]) -> bool:
+    """True when a verdict stops the answer. An unreadable verdict does not: the citation check
+    has already passed, and forwarding every unclear reply would hide good answers."""
+    return any(verdicts.get(label) is bad for label, bad in CHECK_FORWARD.items())
 
 
 def scope_check(subject: str, topics: list[str], question: str) -> tuple[str, ForwardReason | None]:

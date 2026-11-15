@@ -46,6 +46,7 @@ def main() -> None:
     ap.add_argument("--difficulty", choices=["easy", "hard", "exam"])
     ap.add_argument("--limit", type=int)
     ap.add_argument("--judge", action="store_true", help="grade answers with the `judge` role")
+    ap.add_argument("--no-check", action="store_true", help="skip the live answer check")
     args = ap.parse_args()
 
     default_path = REPO_ROOT / "eval" / "sets" / f"{args.subject}.yaml"
@@ -75,6 +76,7 @@ def main() -> None:
                     k=args.k,
                     rerank_candidates=args.rerank,
                     hybrid=args.hybrid,
+                    check=not args.no_check,
                 )
             )
         except Exception as e:  # noqa: BLE001 - recorded in the report, run continues
@@ -168,6 +170,7 @@ def score(q: Question, a: Answer) -> dict:
         "expected_pages": sorted(p for _, p in expected),
         "forwarded": a.forwarded.value if a.forwarded else None,
         "scope": a.scope,
+        "check": a.check,
         "answer": a.text,
         "raw": a.raw,
         "cited_pages": cited_pages,

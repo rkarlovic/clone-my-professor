@@ -37,7 +37,7 @@ LMS (Moodle/Merlin, Teams, Classroom, …) ─► connector ─► CMP core
 3. **Student adaptation** – later phase, minimal.
 
 ## Model layer (LLM-agnostic, open models first)
-- Every model is addressed by **role**, not by name. Roles: `answer`, `fast` (classification, query rewriting, out-of-scope check), `context` (chunk context at indexing), `vision` (image/diagram captions), `judge` (evaluation). Embeddings and reranker are configured the same way.
+- Every model is addressed by **role**, not by name. Roles: `answer`, `fast` (classification, query rewriting, out-of-scope check), `check` (live answer check before the student sees an answer), `context` (chunk context at indexing), `vision` (image/diagram captions), `judge` (evaluation). Embeddings and reranker are configured the same way.
 - `config/models.yaml` maps each role to a LiteLLM model string + parameters. Switching a model = editing config and re-running the golden set; no code change.
 - **Two layers:** LiteLLM is the gateway the code talks to (routing, fallbacks, rate limits, cost tracking); an inference server runs the model. The core never talks to an inference server directly.
 - **Open models first.** Inference servers: **vLLM** for pilot and production (continuous batching for many parallel users, automatic prefix caching, multi-GPU, OpenAI-compatible API) on an EU GPU host; **Ollama** for local development only. llama.cpp directly only for CPU-only demos; SGLang is an acceptable drop-in alternative to vLLM via config. Candidates for `answer`: Qwen 3.5, Mistral Small 4, Gemma 4 — chosen by golden-set results, not by benchmarks. Commercial models (EU region) may be added later purely as config entries.
@@ -354,11 +354,12 @@ Decisions made in step 1:
   makes `import torch` fail with WinError 126 on `shm.dll`.
 - Repo workflow: commit directly to `main`; no AI co-author/attribution lines in commits or PRs.
 
-**Step 2 (answers), part A: pipeline built, evaluated twice 2026-11-14; more prompt work next.**
+**Step 2 (answers), part A: pipeline built with a live answer check; evaluated 2026-11-14/15.**
 - `core/answer.py` `answer_question`: scope check (`fast`: GRADIVO / ADMIN / DRUGO, given the
   subject name and lecture labels) → retrieval (same modes as step 1) → score floor → `answer`
-  role with numbered sources `[1]…[n]` → citation check. Forwarded with a reason
-  (`admin`, `out_of_scope`, `low_score`, `no_source`) and a fixed, gender-neutral message when:
+  role with numbered sources `[1]…[n]` → citation check → answer check (`check`, see below).
+  Forwarded with a reason (`admin`, `out_of_scope`, `low_score`, `no_source`, `failed_check`)
+  and a fixed, gender-neutral message when:
   the scope check says ADMIN/DRUGO; the best score is under the role's `min_score`; the reply
   contains `NE_ZNAM` (even next to a partial answer); or it cites no real source (rule 1).
   Citation numbers pointing at no source are removed. Hits sharing a parent section become one
@@ -463,9 +464,40 @@ Decisions made in step 1:
     off-target or self-contradicting answers; a grounding check in the live path is needed**
     (the dev judge marked h22 off-topic and h11 ungrounded, but also failed correct h02/h13, so a
     9B judge is too noisy for that role on its own). Not yet run on the full set.
+- **Live answer check (2026-11-15)**: new role `check` (dev: the 9B), prompt `answer_check`,
+  forward reason `failed_check` (migration `0004`). After the citation check, the model writes
+  one sentence on what the cited sources say about the question and one on the answer's main
+  claim, then `ODGOVARA` (answers the question), `PROTURJEČI` (contradicts the sources or
+  itself), `IZVAN` (adds terms/claims not in the sources). Asking for the two sentences first
+  mattered: without them the 9B passed h22 and h11. A reply of bare DA/NE lines is read by
+  position; an unreadable verdict lets the answer through. `--no-check` in `evaluate_answers`.
+  - **Only `PROTURJEČI=DA` forwards.** Replayed on 92 stored answers (the two full runs and the
+    8-question run, no answer-model calls), it said DA only for wrong answers (h11 every time, the
+    first run's "Da, Java ne dopušta…" h09). `ODGOVARA=NE` also hit good answers (h03, h06, h13),
+    whose summary sentence agreed with the answer, mostly answers ending with "materijali ne
+    pokrivaju…". A note in the prompt that such a closing sentence is allowed fixed h13 only.
+    `IZVAN` is noisy the same way. Both are kept on the trace, not used.
+  - Full run with the first rule (forward on `ODGOVARA=NE` too), config `dev-2026-11-15.1`,
+    50 questions in **6,550 s (109 min)**, no errors: abstain **6/6 forwarded** (h22 `no_source`:
+    the answer model said `NE_ZNAM` this time), but h03, h06, h11, h13 forwarded by the check
+    (hard answered 0.74). Replaying the final rule on that run's answers forwards only h11:
+
+    | group | answered | cites expected slide | expected slide retrieved |
+    |-------|----------|----------------------|--------------------------|
+    | easy (25) | 1.00 | 1.00 | 1.00 |
+    | hard (19) | **0.89** | **0.89** | 0.89 |
+
+    Hard misses: h14 (retrieval missed 378, forwarded `no_source`) and h11 (forwarded by the
+    check: retrieval misses 285/286, and the answer said "Da" against slide 313). Judge numbers
+    from that run (easy grounded 0.92; hard 0.79 over the 14 it judged) are still rough.
+  - h22 is not covered by the check (only `ODGOVARA` caught it); it depends on the answer model
+    saying `NE_ZNAM`, which it did in 2 of 3 full runs. Its prose version says honestly that the
+    course does not explain `filter`/`map`, without outside knowledge.
+  - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
-  in dense mode. Expect ~80 min for 50 questions dense with `--judge`, ~1 h 35 min for the
+  in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
+  check and `--judge`, ~2 h 10 min for the
   teacher's 60, and ~40 s more per question with hybrid + rerank 20.
 
 Next:
@@ -475,9 +507,9 @@ Next:
 2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
    and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
-3. Step 2 part A (two rounds of prompt fixes done, see above): a grounding check in the live
-   path (h22, h11, h09: off-target or self-contradicting answers); JDBC/databases still GRADIVO
-   (h21); a full re-run after the next change;
+3. Step 2 part A (prompt fixes and the live answer check done, see above): JDBC/databases
+   still GRADIVO (h21); h22 relies on the answer model's `NE_ZNAM`; a full run with the final
+   check rule (only replayed so far);
    a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
@@ -528,8 +560,10 @@ uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --versi
 #   --answer: the clone's answer with citations (or forward; queued unless --no-queue)
 #   needs the chat models: ... exec ollama ollama pull qwen3.5:9b  (and qwen3.5:4b)
 uv run python -m scripts.evaluate_answers --subject <folder> --version 3   # answers on the golden set
-#   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank, --hybrid
-#   ~95 s per question on CPU (dense, with --judge; 78 min for 50), ~40 s more with --hybrid --rerank 20
+#   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank, --hybrid,
+#   --no-check (skip the live answer check)
+#   ~130 s per question on CPU (dense, with the check and --judge; 109 min for 50),
+#   ~40 s more with --hybrid --rerank 20
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
 #   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),

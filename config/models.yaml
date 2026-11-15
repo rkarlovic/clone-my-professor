@@ -8,7 +8,7 @@
 # models on Ollama output — model decisions use the vLLM setup only.
 # A pilot profile (vLLM) will live in a separate file selected via CMP_MODELS_CONFIG.
 
-version: "dev-2026-11-14.4"
+version: "dev-2026-11-15.1"
 
 roles:
   answer:
@@ -34,6 +34,15 @@ roles:
       # Dev on CPU: thinking costs minutes per call (see `context`). Re-test with thinking
       # on the vLLM/GPU setup before a model choice is final.
       reasoning_effort: none
+      keep_alive: 0  # dev only, see `answer`
+
+  check:  # live answer check before the student sees it: on target, no contradiction
+    kind: chat
+    model: ollama_chat/qwen3.5:9b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none  # dev on CPU, see `answer`
       keep_alive: 0  # dev only, see `answer`
 
   context:  # short chunk context at indexing time

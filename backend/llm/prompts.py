@@ -60,6 +60,32 @@ ADMIN – pitanje o organizaciji kolegija i studentovim obavezama: ocjene i bodo
 DRUGO – pitanje koje nije iz tema ovog kolegija: drugi predmet ili programski jezik, tehnologija
   ili alat kojeg nema među temama (npr. web okviri, baze podataka), osobno, opći razgovor
 Ako nisi siguran je li pitanje GRADIVO ili DRUGO, odgovori GRADIVO.""",
+    # Live answer check (`check` role), after the citation check, before the student sees the
+    # answer. Narrower than `judge`: it asks only about failures that must not reach a student,
+    # not whether every word is in the sources (the dev judge failed correct answers on that).
+    "answer_check": """Provjeravaš odgovor AI asistenta prije nego što ga student vidi.
+
+Izvori (isječci iz nastavnikovih materijala):
+
+{sources}
+
+Pitanje studenta: {question}
+
+Odgovor asistenta:
+{answer}
+
+Najprije napiši dvije kratke rečenice:
+IZVORI KAŽU: što izvori kažu o onome što student pita (ili „ništa", ako o tome ne govore)
+ODGOVOR KAŽE: što je glavna tvrdnja odgovora
+
+Zatim napiši tri retka, točno ovim oznakama, svaki s DA ili NE:
+ODGOVARA: DA ako izvori odgovaraju na studentovo pitanje i odgovor to prenosi; NE ako izvori o
+  tome ne govore, pa odgovor uglavnom objašnjava što nema ili govori o nečemu drugom.
+  Odgovor smije završiti jednom rečenicom o tome što materijali ne pokrivaju: to nije razlog
+  za NE ako ostatak odgovora odgovara na pitanje.
+PROTURJEČI: DA ako glavna tvrdnja odgovora nije ono što kažu izvori, ili odgovor proturječi sam
+  sebi (npr. počne s „Da", a zatim kaže da nije tako); inače NE
+IZVAN: DA ako odgovor uvodi važne pojmove, metode ili tvrdnje kojih u izvorima nema; inače NE""",
     # Evaluation only (`judge` role): the answer is judged against the slides it cites, never
     # against a model-written reference answer (CLAUDE.md "Evaluation strategy").
     "judge": """Procjenjuješ odgovor AI asistenta studentu.

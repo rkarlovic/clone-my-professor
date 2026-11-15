@@ -8,7 +8,7 @@ from core.settings import BACKEND_DIR, REPO_ROOT
 from llm.config import load_model_config
 
 MODELS_YAML = REPO_ROOT / "config" / "models.yaml"
-REQUIRED_ROLES = {"answer", "fast", "context", "vision", "judge", "embedding", "reranker"}
+REQUIRED_ROLES = {"answer", "fast", "check", "context", "vision", "judge", "embedding", "reranker"}
 
 
 def test_models_yaml_defines_every_role() -> None:
