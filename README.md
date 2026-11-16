@@ -5,13 +5,14 @@ using **only the teacher's approved materials** and following the teacher's teac
 Students reach it from their learning platform (Moodle/Merlin first, later Teams and Google
 Classroom) or from CMP's own web app. Content and users are primarily **Croatian**.
 
-> **Status:** early prototype — build step 1 of 6 (retrieval spike) measured, step 2 (answers)
-> started. There is no chat UI yet; what works today is parsing course material, indexing it,
-> measuring how well search finds the right slide, and command-line answers with citations that
-> forward what they can't ground to a teacher queue.
+> **Status (2026-11-16):** prototype. The clone already answers students' questions from one real
+> course with citations, and forwards what it can't answer to the teacher; it runs from the command
+> line on a laptop. There is no chat window, teacher dashboard or Moodle link yet.
+> See [Progress so far](#progress-so-far).
 
 ## Contents
 
+- [Progress so far](#progress-so-far)
 - [Principles](#principles)
 - [What works so far](#what-works-so-far)
 - [Architecture](#architecture)
@@ -22,6 +23,54 @@ Classroom) or from CMP's own web app. Content and users are primarily **Croatian
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [License](#license)
+
+## Progress so far
+
+*Plain-language summary, kept up to date. Technical detail and every measurement:
+[CLAUDE.md](CLAUDE.md), section "Current status".*
+
+**Where we are:** step 2 of 6. Step 1 (finding the right slide for a question) is done and
+measured; step 2 (writing answers) works and is being tuned. Everything runs on a laptop without a
+graphics card, so one answer takes about two minutes; on the pilot server it will take seconds.
+
+**Test course:** *Suvremene tehnike programiranja* (Java, one 945-page PDF of lecture slides),
+used with permission and never stored in this repository. Two question sets:
+
+- 50 questions written to test the clone: 25 worded like the slides, 19 worded like a student
+  would ask (casual, paraphrased, one in English), and 6 the clone must **not** answer
+  (other subjects, grades and deadlines). Written by Claude from the slides; the teacher reviews them
+  later.
+- 60 real oral-exam practice questions written by the teacher.
+
+**Latest results** (2026-11-15):
+
+| What we measured | Result |
+|---|---|
+| Finds the right slide (top 5 results), slide-like / student-like questions | 100 % / 89 % (95 % with the slower search mode) |
+| Answers the teacher's 60 exam questions, citing the right slides | 59 of 60 |
+| Answers the 25 slide-like questions, citing the right slides | 25 of 25 |
+| Answers the 19 student-like questions, citing the right slides | 16–17 of 19 |
+| Forwards the 6 questions it must not answer to the teacher | 6 of 6 |
+| Of 35 answers checked by hand against their slides | 5 with a clear error, 3 more with a small unsupported addition |
+
+**What an answer goes through:** questions about grades or deadlines go straight to the teacher;
+otherwise the clone searches the slides, writes an answer citing slide numbers, and an automatic
+check stops answers that cite nothing, say "I don't know" in prose, or contradict the slides.
+Everything stopped goes to the teacher's question queue.
+
+**Known weak spots:**
+
+- A handful of answers still slip in something the slides don't say (e.g. mixing up two columns of
+  a Java vs C# table). The automatic check catches contradictions but not all of these.
+- A few questions (2 of 19 student-like, 1 of 60 exam) are missed because search doesn't find
+  their slide; the clone then forwards them instead of guessing.
+- The automatic grader we use for measuring is too strict about half the time when it fails an
+  answer, so its scores understate quality; a sample was checked by hand.
+- A few slides themselves are outdated or contain errors; that list goes to the teacher.
+
+**Next:** a second course of a different kind (to check nothing is tuned to this one), fixes for
+the weak spots above, the teacher's review of the question set, then step 3: chat window, teacher
+dashboard and upload. Choosing the final AI model waits for the pilot server.
 
 ## Principles
 
@@ -46,16 +95,15 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking, optional hybrid with BGE-M3 sparse vectors (experiment) |
-| Answers | Scope check (`fast`), answer with numbered citations (`answer`), forwarding to a teacher queue when the question is admin/off-topic or the reply cites no source |
+| Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |
 
-**First results** (subject *Suvremene tehnike programiranja*, 945 pages, 50 draft golden questions):
-recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense search, and
-**0.95** on hard ones with a context sentence per chunk (`--context`) plus hybrid candidates and
-reranking (see CLAUDE.md for the full comparison and timings). Questions the clone should decline
-score in the same range as weak answerable ones, so a score threshold alone won't be enough for
-abstention — step 2 needs an explicit out-of-scope check.
+Retrieval: recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense
+search, **0.89** with a context sentence per chunk (`--context`, the current default version), and
+**0.95** with hybrid candidates plus reranking. Answers (dense, dev models on CPU): easy 25/25,
+hard 16–17/19, teacher's exam questions 59/60 cited the expected slides; 6/6 out-of-scope and admin
+questions forwarded. Full comparisons and timings in CLAUDE.md.
 
 Not built yet: chat UI, teacher dashboard,
 LMS connectors, background jobs, Langfuse tracing.
@@ -219,7 +267,7 @@ To stop everything: `docker compose -f infra/docker-compose.dev.yml --env-file .
 ## Roadmap
 
 1. **Retrieval spike** — parsing, chunking, embeddings, search, recall@5 on a golden set *(measured; experiments left)*
-2. **Answers** — model roles, citations, abstention + teacher queue; compare 2–3 open models *(in progress)*
+2. **Answers** — model roles, citations, abstention + teacher queue, live answer check *(working, being tuned)*; compare 2–3 open models *(needs the pilot GPU server)*
 3. **Product** — teacher persona, approval workflow, versioning, question queue, chat UI, direct upload
 4. **Moodle connector** — LTI 1.3 + Web Services polling, then SRCE/Merlin
 5. Teams and Google Classroom connectors
