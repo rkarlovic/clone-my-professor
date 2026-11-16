@@ -592,6 +592,19 @@ Decisions made in step 1:
     live check, writing reasons first made the 9B judge lenient.
   - **Conclusion: the 9B judge is not fixed by prompt wording.** Judge numbers stay a pointer to
     answers worth reading; a reliable judge needs a stronger model (see "Open questions").
+  - **Full golden run with the new rule 4** (answer `702dba37bb04`, judge `fe9dabab2dd9`,
+    50 questions in **6,586 s (110 min)**, no errors): easy 1.00 / 1.00 (judge grounded 0.80);
+    hard answered **0.84**, cites expected **0.79** (was 0.89 / 0.84); abstain 5/6. Closing
+    "not covered" sentences 11 → 9 of 42 answered: far less than the 17-question re-run showed.
+    - **h01 regression from the rule:** a correct answer whose closing note the model labelled
+      `**NE_ZNAM**:` was forwarded (`no_source`).
+    - **h11 wrong answer reached the student**: "Da, sučelje može imati metodu koja ima tijelo"
+      (retrieval missed 285/286 again), check ODGOVARA=NE, IZVAN=DA, PROTURJEČI=NE, so nothing
+      forwarded it; last run PROTURJEČI=DA caught it. Run-to-run variance of the 9B check.
+    - h09 opened "Da, Java ne dopušta…" again and was forwarded by PROTURJEČI (correct catch);
+      h22 answered in one sentence about ZIP `stream()` (ODGOVARA=DA; harmless, off-target);
+      h14 `no_source` as before.
+    - On this set the rule's gain is within run-to-run variance and it caused h01.
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the

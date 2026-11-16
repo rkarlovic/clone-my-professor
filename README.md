@@ -65,8 +65,11 @@ Everything stopped goes to the teacher's question queue.
 - A few questions (2 of 19 student-like, 1 of 60 exam) are missed because search doesn't find
   their slide; the clone then forwards them instead of guessing.
 - Answers often ended with a sentence listing things the slides "don't cover", even when the
-  question was fully answered. A new instruction removed it from about half of the answers
-  checked; the rest still add a generic line of this kind.
+  question was fully answered. A new instruction removed it from about half of 17 answers
+  checked, but on the full 50-question run the effect was small (11 → 9 of 42 answers), and in
+  one case the model marked a correct answer "I don't know", so it went to the teacher.
+- The automatic check is not consistent between runs: one wrong "yes" answer that it stopped
+  last time reached the student this time.
 - The automatic grader we use for measuring is too strict about half the time when it fails an
   answer, so its scores understate quality; a sample was checked by hand. Rewording its
   instructions did not make it more reliable; a stronger grader model is the likely fix.
