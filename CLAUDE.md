@@ -513,7 +513,8 @@ Decisions made in step 1:
     (misses h11 `failed_check`, h14 `no_source`, and h03 answered citing only 784
     (`invokeLater`) instead of 636/744: answer-model variation at temperature 0.2, retrieval
     still had the slides). No good answer forwarded. Judge grounded easy 0.80 (0.96 last run;
-    e16 says Java boxes to `System.Object`, a real slip mixing C#; others look like judge noise),
+    e16 says Java boxes to `System.Object`, which slide 365 itself says (see the judge review);
+    others are judge noise),
     hard 0.59. Run-to-run variance of one or two questions is normal on this set.
 - **Scope check sweep, all 110 questions (golden + teacher), 4B `fast` (2026-11-15)**, ~10–13 s
   per question with model reload (19–24 min per sweep):
@@ -550,6 +551,26 @@ Decisions made in step 1:
   mostly-refusal. Added "ne navod-", "ne opisuj-"; replayed on every stored answer (golden runs
   + this one) it forwards t25 and nothing else new. Exam questions use the course's own terms,
   so these numbers behave like the easy set (see step 1).
+- **Judge verdicts reviewed (2026-11-16, by Claude, not yet by a person).** 35 verdicts from
+  the last golden run and the teacher run: every not-grounded/off-topic verdict (19) plus 8 random
+  grounded ones per run, read against the cited slides. Details per question (quotes the
+  teacher's slides, so git-ignored): `eval/reports/Suvremene_tehnike_programiranja/judge-review-2026-11-16.md`.
+  - Judge "grounded": 16/16 right. Judge "not grounded": 9 right, 8 wrong, 2 borderline, so a
+    negative is right about half the time. **6 of the 8 wrong negatives have a closing
+    "materijali ne pokrivaju …" sentence that names topics not in the sources** (SpringLayout,
+    SwingWorker, profiling); the judge treats those as claims.
+  - Corrected grounding of the last golden run: easy ≈ 0.96 (judge 0.80), hard ≈ 0.82 (judge 0.59).
+    Judge numbers understate grounding; use them only as a pointer to answers worth reading.
+  - **Real errors the live check passed:** e11 presents C#'s `internal` as a Java modifier
+    (wrong column of slide 176's comparison table); h03 advises invokeLater/invokeAndWait for the
+    long job (wrong, outside knowledge); t56 misreads join(); t35 contradicts itself (from an
+    ambiguous slide line); h09 opens "Da, ali …" for a "no". All had PROTURJEČI=NE.
+  - Slide content issues for the teacher: 365 says Java boxes to `System.Object` (C#); 364's
+    "nisu klase i nemaju svoje metode" is under the wrappers bullet but means primitives; 313
+    outdated; 585 "kolekcija" vs 620 "nije kolekcija".
+  - Next for answers: the closing "not covered" sentence should only name a part of the question
+    (it is clutter for students and fools the judge); tell the judge such a sentence is not a
+    claim; comparison tables need care (e11).
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -566,7 +587,8 @@ Next:
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
-   the full run); a person checks a sample of judge verdicts; the teacher's 60 questions and hybrid + rerank;
+   the full run); judge sample reviewed by Claude (a person confirms it; fix the closing
+   sentence and the judge prompt, see above); the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
