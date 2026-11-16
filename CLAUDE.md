@@ -570,8 +570,28 @@ Decisions made in step 1:
     outdated; 585 "kolekcija" vs 620 "nije kolekcija".
   - Next for answers: the closing "not covered" sentence should only name a part of the question
     (it is clutter for students and fools the judge); tell the judge such a sentence is not a
-    claim; comparison tables need care (e11).
+    claim; comparison tables need care (e11). (Both tried 2026-11-16, see below.)
   - Cost: ~42 s per answered question on this laptop (≈ 25–35 s model + reload).
+- **Closing sentence and judge prompt (2026-11-16).** 29 of the last runs' answered questions
+  (golden + teacher) had a closing "not covered" sentence; most named topics nobody asked about.
+  - Answer prompt rule 4 (`702dba37bb04`): the closing sentence names only the part of the
+    question not covered, in the question's words, no other topics/methods/classes, and is left
+    out when the sources answer the whole question. Re-run on 17 of those questions (11 golden,
+    6 teacher; 2,760 s): **9 lost the sentence** (e09 e21 h04 h09 h10 h15 h18 t06 t34), t60 now
+    says only "profiling is not covered"; e16 e19 h02 h03 t23 t33 t38 still add a generic one
+    ("detailed examples are not covered"), h03's names `new Thread()`/`ExecutorService` and h18
+    lists Git setup steps without the refusal words. All 17 still answered citing the expected
+    slide; h09 now opens "Ne, Java ne dopušta…". h03's wrong invokeLater advice remains (the
+    check said ODGOVARA=NE, IZVAN=DA, not forwarded). Not yet run on the full sets.
+  - Judge prompt (`fe9dabab2dd9`): a sentence saying what the materials do not cover is not a
+    claim; rewording and obvious inferences are fine. Re-judged the 35 reviewed answers (33 with
+    a clear manual verdict): **25/33 agree, same as the old prompt**; it now passes h04 and h10
+    but fails e20, and still fails e21 and t60 for their closing sentences. No real error passed.
+  - A reasoning-first judge (list claims without a source, then the verdict) was tried and
+    **rejected**: 23/33, it passed 6 of the 9 real errors (h02 h03 h09 t10 t35 t56). Unlike the
+    live check, writing reasons first made the 9B judge lenient.
+  - **Conclusion: the 9B judge is not fixed by prompt wording.** Judge numbers stay a pointer to
+    answers worth reading; a reliable judge needs a stronger model (see "Open questions").
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
@@ -587,8 +607,9 @@ Next:
    material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
-   the full run); judge sample reviewed by Claude (a person confirms it; fix the closing
-   sentence and the judge prompt, see above); the teacher's 60 questions and hybrid + rerank;
+   the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
+   rule halves the clutter, judge prompt wording does not help (see above); full-set run with
+   the new answer prompt; the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides

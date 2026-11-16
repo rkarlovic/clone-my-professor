@@ -64,8 +64,12 @@ Everything stopped goes to the teacher's question queue.
   a Java vs C# table). The automatic check catches contradictions but not all of these.
 - A few questions (2 of 19 student-like, 1 of 60 exam) are missed because search doesn't find
   their slide; the clone then forwards them instead of guessing.
+- Answers often ended with a sentence listing things the slides "don't cover", even when the
+  question was fully answered. A new instruction removed it from about half of the answers
+  checked; the rest still add a generic line of this kind.
 - The automatic grader we use for measuring is too strict about half the time when it fails an
-  answer, so its scores understate quality; a sample was checked by hand.
+  answer, so its scores understate quality; a sample was checked by hand. Rewording its
+  instructions did not make it more reliable; a stronger grader model is the likely fix.
 - A few slides themselves are outdated or contain errors; that list goes to the teacher.
 
 **Next:** a second course of a different kind (to check nothing is tuned to this one), fixes for
