@@ -605,6 +605,9 @@ Decisions made in step 1:
       h22 answered in one sentence about ZIP `stream()` (ODGOVARA=DA; harmless, off-target);
       h14 `no_source` as before.
     - On this set the rule's gain is within run-to-run variance and it caused h01.
+      **Reverted (2026-11-16)**: answer prompt back to the earlier rule 4 (the answer prompt is
+      identical to the one before this experiment); the judge note stays (harmless, same
+      agreement). Revisit the closing sentence with a stronger model on vLLM or a bigger set.
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
@@ -621,8 +624,7 @@ Next:
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
-   rule halves the clutter, judge prompt wording does not help (see above); full-set run with
-   the new answer prompt; the teacher's 60 questions and hybrid + rerank;
+   rule tried and reverted, judge prompt wording does not help (see above); the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides

@@ -67,7 +67,8 @@ Everything stopped goes to the teacher's question queue.
 - Answers often ended with a sentence listing things the slides "don't cover", even when the
   question was fully answered. A new instruction removed it from about half of 17 answers
   checked, but on the full 50-question run the effect was small (11 → 9 of 42 answers), and in
-  one case the model marked a correct answer "I don't know", so it went to the teacher.
+  one case the model marked a correct answer "I don't know", so it went to the teacher. The
+  instruction was taken back out; we will retry with a stronger model.
 - The automatic check is not consistent between runs: one wrong "yes" answer that it stopped
   last time reached the student this time.
 - The automatic grader we use for measuring is too strict about half the time when it fails an
