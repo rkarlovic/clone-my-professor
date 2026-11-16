@@ -4,7 +4,8 @@
                                       [--set PATH]
 
 answerable questions -> recall@k (any expected source in the top k) and MRR, per difficulty
-(easy / hard: student-style questions; exam: written by the teacher as exam practice).
+(easy / hard: student-style questions; exam: written by the teacher as exam practice;
+check: auto-generated from the slides, see scripts.checkset).
 out_of_scope / admin -> best retrieval score, to calibrate the abstention threshold (step 2).
 --set: another set file for the same subject (default eval/sets/<subject>.yaml), e.g. a local,
 git-ignored one in eval/sets/local/ made from a teacher's own questions.
@@ -40,7 +41,7 @@ class Question(BaseModel):
     id: str
     question: str
     type: Literal["answerable", "out_of_scope", "admin"]
-    difficulty: Literal["easy", "hard", "exam"] = "easy"
+    difficulty: Literal["easy", "hard", "exam", "check"] = "easy"
     expected_sources: list[Source] = []
     reference_answer: str | None = None
     notes: str = ""
@@ -176,7 +177,7 @@ def main() -> None:
     print(
         f"{args.subject} v{version.version}, k={args.k}, rerank={args.rerank}, hybrid={args.hybrid}"
     )
-    for name in ("easy", "hard", "exam", "all"):
+    for name in ("easy", "hard", "exam", "check", "all"):
         if name in summary:
             print(f"  {name:5} {summary[name]}")
     print("  misses:")

@@ -1,6 +1,9 @@
 # Evaluation
 
 - `sets/<subject_id>.yaml` — golden question set per subject (format: `sets/_template.yaml`).
+- `sets/local/` — sets made from someone else's material (git-ignored): a teacher's own
+  questions, and each subject's auto-generated check set `<subject_id>.check.yaml`
+  (`uv run python -m scripts.checkset --subject <id>`; delete bad questions by hand).
 - `reports/` — run outputs (git-ignored).
 
 Build step 1 measures **recall@5**: for each `answerable` question, does any of the top 5

@@ -5,7 +5,7 @@ using **only the teacher's approved materials** and following the teacher's teac
 Students reach it from their learning platform (Moodle/Merlin first, later Teams and Google
 Classroom) or from CMP's own web app. Content and users are primarily **Croatian**.
 
-> **Status (2026-11-16):** prototype. The clone already answers students' questions from one real
+> **Status (2026-11-17):** prototype. The clone already answers students' questions from one real
 > course with citations, and forwards what it can't answer to the teacher; it runs from the command
 > line on a laptop. There is no chat window, teacher dashboard or Moodle link yet.
 > See [Progress so far](#progress-so-far).
@@ -41,6 +41,12 @@ used with permission and never stored in this repository. Two question sets:
   (other subjects, grades and deadlines). Written by Claude from the slides; the teacher reviews them
   later.
 - 60 real oral-exam practice questions written by the teacher.
+- New: 60 questions the system writes by itself from slides spread over the whole course, worded
+  like a student (casual, describing a problem, in English, without Croatian letters), plus 12
+  standard questions it must forward. Every course will get such a set automatically, so
+  teachers never have to write test questions. Search finds the right slide for 82–92 % of them
+  (depending on the search mode), about the same as for the hand-written student-like
+  questions, which suggests they are realistic; about 5 of the 60 were poorly worded.
 
 **Latest results** (2026-11-15):
 

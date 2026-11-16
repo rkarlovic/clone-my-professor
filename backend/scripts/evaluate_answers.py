@@ -43,7 +43,7 @@ def main() -> None:
     ap.add_argument("--hybrid", action="store_true")
     ap.add_argument("--set", type=Path, help="set file (default eval/sets/<subject>.yaml)")
     ap.add_argument("--ids", help="comma-separated question ids")
-    ap.add_argument("--difficulty", choices=["easy", "hard", "exam"])
+    ap.add_argument("--difficulty", choices=["easy", "hard", "exam", "check"])
     ap.add_argument("--limit", type=int)
     ap.add_argument("--judge", action="store_true", help="grade answers with the `judge` role")
     ap.add_argument("--no-check", action="store_true", help="skip the live answer check")

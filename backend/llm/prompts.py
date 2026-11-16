@@ -86,6 +86,23 @@ ODGOVARA: DA ako izvori odgovaraju na studentovo pitanje i odgovor to prenosi; N
 PROTURJEČI: DA ako glavna tvrdnja odgovora nije ono što kažu izvori, ili odgovor proturječi sam
   sebi (npr. počne s „Da", a zatim kaže da nije tako); inače NE
 IZVAN: DA ako odgovor uvodi važne pojmove, metode ili tvrdnje kojih u izvorima nema; inače NE""",
+    # Auto-generated check set (core/checkset.py): one student-style question per slide, written
+    # so that it does not copy the slide's wording (otherwise scores look too good).
+    "checkset_question": """Ovo je isječak iz nastavnih materijala kolegija „{subject}".
+Mjesto u materijalima: {heading_path}
+
+<isjecak>
+{text}
+</isjecak>
+
+Napiši jedno pitanje koje bi student ovog kolegija mogao postaviti, a na koje ovaj isječak
+odgovara. Student isječak nije vidio: ne prepisuj njegove rečenice ni redoslijed riječi, i ne
+spominji „isječak", „slajd" ni „predavanje". Pitaj o jednoj stvari koju isječak objašnjava,
+kao netko tko odgovor ne zna: kratko, najviše 15 riječi, bez nabrajanja sadržaja isječka.
+Stil pitanja: {style}.
+Ako isječak nije gradivo o kojem bi student pitao (naslovna stranica, popis tema, kontakt,
+literatura), napiši samo PRESKOČI.
+Odgovori samo pitanjem.""",
     # Evaluation only (`judge` role): the answer is judged against the slides it cites, never
     # against a model-written reference answer (CLAUDE.md "Evaluation strategy").
     "judge": """Procjenjuješ odgovor AI asistenta studentu.

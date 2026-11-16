@@ -608,6 +608,35 @@ Decisions made in step 1:
       **Reverted (2026-11-16)**: answer prompt back to the earlier rule 4 (the answer prompt is
       identical to the one before this experiment); the judge note stays (harmless, same
       agreement). Revisit the closing sentence with a stronger model on vLLM or a bigger set.
+- **Auto-generated check set, first version (2026-11-16/17).** `core/checkset.py` +
+  `scripts.checkset` (prompt `checkset_question`, role `answer`): eligible = embedded chunks of
+  ≥ 30 words, not `solution` or `exercise` (a homework slide yields "how do I build the
+  calculator", which tests rule 4, not search); material split into n consecutive bins, one
+  random slide per bin (seeded; the model may answer `PRESKOČI`, then the next slide in the
+  bin, up to 3 tries). Styles in turn: casual, symptom, English, paraphrase, no_diacritics (a
+  casual question with diacritics stripped in code). Questions ≤ 15 words, about one thing,
+  not listing the slide's contents (the first trial copied slide bullet lists). Expected source
+  = the slide it was written from; no reference answers. Plus 12 **generic abstention
+  questions** (7 admin, several without `ADMIN_TERMS` words, one English; 5 everyday off-topic),
+  the same for every subject, Croatian like `ADMIN_TERMS`. Output in the golden-set format,
+  difficulty `check`, in `eval/sets/local/<subject>.check.yaml` (git-ignored: it paraphrases the
+  installation's material); regenerating needs `--force` because a teacher may have deleted
+  questions. Not yet hooked into ingest (step 3 runs it as a Procrastinate job after ingest).
+  - First set for v3: 60 slide questions (slides 4–935) + 12 generic in **1,074 s (18 min,
+    ~18 s per question with the 9B)**. Read through: ~5 poor (c002 nonsense; c031/c045/c058 say
+    "in this model/example/test class"; c017/c051 vague): what a teacher would delete.
+  - Retrieval, recall@5 / MRR (60 questions): dense **0.82 / 0.69**, hybrid 0.85 / 0.68,
+    dense + rerank 20 0.90 / 0.82, **hybrid + rerank 20 0.92 / 0.85** (8 s / 80 s / 27 min /
+    27 min). Same order of modes as the golden hard set (0.89 / 0.79 / 0.89 / 0.95) and similar
+    level: the generated questions behave like hard, student-style questions, not like the
+    easy set. Dense misses by style: symptom 4/12, paraphrase 3, casual 2, English 2,
+    no_diacritics 0.
+  - Many misses are the neighbouring slide (351 → 350, 657 → 658, 827 → 822/823, 913 → 912):
+    with one expected slide per question and nobody marking, a neighbour that also answers
+    counts as a miss, so check-set recall understates retrieval somewhat.
+  - Generic questions' dense top scores 0.31–0.61 overlap the lowest answerable 0.48: again,
+    a score floor alone cannot decide abstention.
+  - Not yet: an answer run on the check set (~2 h 40 min for 72 questions with `--judge`).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
@@ -625,7 +654,8 @@ Next:
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
    rule tried and reverted, judge prompt wording does not help (see above); the teacher's 60 questions and hybrid + rerank;
-   auto-generated check sets. Part B (model choice) needs the vLLM/GPU setup.
+   auto-generated check sets: generator and first set done (retrieval measured, see above);
+   left: an answer run on it, hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
@@ -678,6 +708,9 @@ uv run python -m scripts.evaluate_answers --subject <folder> --version 3   # ans
 #   --no-check (skip the live answer check)
 #   ~130 s per question on CPU (dense, with the check and --judge; 109 min for 50),
 #   ~40 s more with --hybrid --rerank 20
+uv run python -m scripts.checkset --subject <folder> --version 3 -n 60   # auto-generated check set
+#   -> eval/sets/local/<folder>.check.yaml (git-ignored); --seed, --force (replace an edited set)
+#   ~18 s per question on CPU; run it with --set like any other set
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
 #   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),
