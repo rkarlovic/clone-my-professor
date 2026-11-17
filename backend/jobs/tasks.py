@@ -60,3 +60,22 @@ def check_version(kb_version_id: str) -> None:
         report["written"],
         report["seconds"],
     )
+
+
+@app.task(name="check_persona", queue=INGEST_QUEUE, pass_context=False)
+def check_persona(persona_id: str) -> None:
+    """Answer a sample of check questions and the generic forward questions with a persona;
+    activate it if forwarding and answering stay above the thresholds, else reject it."""
+    from core.persona import check_persona as run
+
+    report = run(uuid.UUID(persona_id))
+    log.info(
+        "persona %s: %s (forwarded %s/%s, answered %s/%s, %.0f s)",
+        persona_id,
+        "active" if report["passed"] else "rejected",
+        report.get("forwarded"),
+        report.get("generic"),
+        report.get("answered"),
+        report.get("check_questions"),
+        report.get("seconds", 0),
+    )

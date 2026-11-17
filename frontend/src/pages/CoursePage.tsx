@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { teacherApi, type Course, type Version } from "../api";
 import { CheckQuestions } from "../components/CheckQuestions";
+import { PersonaPanel } from "../components/PersonaSettings";
 import { QuestionQueue } from "../components/QuestionQueue";
 import { UploadBox } from "../components/UploadBox";
 import { VersionRow } from "../components/VersionRow";
@@ -12,7 +13,7 @@ export function CoursePage({ kbId }: { kbId: string }) {
   const [course, setCourse] = useState<Course | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [files, setFiles] = useState<string[]>([]); // documents of the active version
-  const [tab, setTab] = useState<"materials" | "questions" | "checks">("materials");
+  const [tab, setTab] = useState<"materials" | "questions" | "checks" | "persona">("materials");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -84,6 +85,9 @@ export function CoursePage({ kbId }: { kbId: string }) {
         <button role="tab" aria-selected={tab === "checks"} onClick={() => setTab("checks")}>
           Provjerna pitanja
         </button>
+        <button role="tab" aria-selected={tab === "persona"} onClick={() => setTab("persona")}>
+          Postavke asistenta
+        </button>
       </div>
 
       {tab === "materials" ? (
@@ -102,8 +106,10 @@ export function CoursePage({ kbId }: { kbId: string }) {
         </>
       ) : tab === "questions" ? (
         <QuestionQueue kbId={kbId} files={files} />
-      ) : (
+      ) : tab === "checks" ? (
         <CheckQuestions kbId={kbId} latest={latestCheck} />
+      ) : (
+        <PersonaPanel kbId={kbId} live={!!course?.active_version} />
       )}
     </main>
   );

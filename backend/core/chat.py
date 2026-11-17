@@ -17,6 +17,7 @@ from core.answer import Answer, answer_question
 from core.approval import active_version
 from core.db import app_engine
 from core.models import ChatMessage, KnowledgeBase
+from core.persona import active_persona, persona_text
 from core.queue import forward_to_teacher
 
 # Rule 6 (EU AI Act transparency): every chat says the student is talking to an AI.
@@ -63,9 +64,18 @@ def ask(
     arrives, so an activation during a slow answer cannot mix two versions."""
     with Session(app_engine()) as s:
         course = course_for_students(s, kb_id)
+        persona = active_persona(s, kb_id)
+        text = persona_text(persona) if persona else None
+        persona_version = persona.version if persona else None
     if course is None or course.version_id is None:
         raise CourseNotLive(str(kb_id))
-    answer = (answer_fn or answer_question)(course.version_id, question, on_stage=on_stage)
+    answer = (answer_fn or answer_question)(
+        course.version_id,
+        question,
+        on_stage=on_stage,
+        persona_text=text,
+        persona_version=persona_version,
+    )
     with Session(app_engine(), expire_on_commit=False) as s, s.begin():
         queued = None
         if answer.forwarded:

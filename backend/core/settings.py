@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     # Auto-generated check questions per course (spread over the material by slide count).
     # On a CPU laptop each takes ~18 s with the dev 9B; on the pilot GPU about a second.
     check_questions: int = 60
+    # Persona activation check: this many of the course's check questions (plus the generic
+    # forward questions) are answered with the new persona; it goes live only if at least
+    # `persona_min_forwarded` of the generic ones are forwarded and `persona_min_answered` of the
+    # check questions are answered. Provisional thresholds (dev 9B on the first subjects: 11/12
+    # forwarded, 57/60 answered); set them from pilot results. ~90 s per question on CPU.
+    persona_check_questions: int = 10
+    persona_min_forwarded: float = 0.9
+    persona_min_answered: float = 0.7
 
     @property
     def jobs_conninfo(self) -> str:

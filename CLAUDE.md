@@ -974,6 +974,49 @@ Decisions made in step 1:
 - Note: on this CPU a 60-question check takes ~18 min after an upload and holds the course
   lock, so a second upload waits behind it (it shows as queued).
 
+**Step 3, part 7: the teacher's persona (2026-11-17).** Step 3 is complete except real
+sign-in (see "Not yet" lists above).
+- `core/persona.py`: `PersonaSettings` (address vi/ti, answer length short/medium/long,
+  exercise help hints/guided/concepts — never full solutions, rule 4 —, examples yes/no,
+  terminology note, `forward_topics`) + one free-text field (≤ 2,000 chars), rendered into a
+  short Croatian instruction list that the answer prompt places after the platform rules
+  ("Upute nastavnika (vrijede samo ako se ne kose s pravilima iznad)"). A forward topic becomes
+  "Na pitanja o ovim temama napiši samo NE_ZNAM: …", so it reaches the teacher through the
+  normal forward path. The rendering lives in core (it is the teacher's settings, not a
+  platform prompt); its version is the persona version on every trace.
+- `persona_config` (migration `0012`): versioned per course; draft → checking → active
+  (one per course, partial unique index; the previous one becomes retired) | rejected. Saving
+  updates the open draft or starts a new version. Activation needs a published course and no
+  other persona being checked.
+- **Activation check** (job `check_persona`, same per-course lock): answers
+  `PERSONA_CHECK_QUESTIONS` (default 10) of the course's check questions valid for the
+  published version, spread over files, and the 12 generic forward questions, with the persona;
+  passes only if ≥ `PERSONA_MIN_FORWARDED` (0.9) of the generic ones are forwarded and
+  ≥ `PERSONA_MIN_ANSWERED` (0.7) of the check questions are answered (provisional thresholds;
+  set them from pilot results). Stores the report with every answer, so the teacher reads how
+  the assistant sounds. Answer-level only (no judge): grounding is still the live check's job.
+- Chat answers with the active persona (`persona_text`, `persona_version` passed to
+  `answer_question`); no persona = the platform default. Preview (`POST …/persona/{n}/preview`,
+  server-sent events like the chat, nothing stored or forwarded) answers from the published
+  version with a draft. The chat and the preview share `app/streaming.py`.
+- API: `GET/PUT /api/courses/{kb_id}/persona`, `POST …/persona/{n}/preview`,
+  `POST …/persona/{n}/activate`. Page: tab "Postavke asistenta" (form, "Spremi nacrt",
+  "Aktiviraj" with confirmation, "Isprobaj nacrt", versions with the exact prompt text and the
+  check result incl. answers; polls while checking).
+- Tests: backend 5 (rendering; drafts and activation rules; a safe persona activates and
+  retires the old one; a persona that stops forwarding is rejected with the reason; the chat
+  passes the active persona; API flow and ownership), frontend 2 (form from the active
+  persona, topics one per line; activation needs a draft and published material).
+- **Live (demo course, dev models)**: persona "ti", short answers, forward topic "broj
+  darovite djece u populaciji". Preview: "Koliko ima darovite djece u jednoj generaciji?"
+  (slide 10 covers it) → forwarded, as the persona says; "Zašto identifikacija … kontinuirani
+  proces?" → two sentences citing slides 16 and 7 (shorter than without the persona).
+  Activation check (`PERSONA_CHECK_QUESTIONS=2`): **12/12 generic forwarded** (7 admin, 5
+  off-topic; "Is the final exam oral or written?" and "Napiši mi pjesmu o moru." as
+  `low_score`), 2/2 answered (1 citing the expected slide), **244 s** → active.
+- Not yet: the student adaptation layer (layer 3), comparing a persona's check with the
+  previous one's (the thresholds are absolute), a judge in the check (needs the GPU).
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the

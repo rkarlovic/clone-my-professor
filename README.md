@@ -171,8 +171,17 @@ for 8 of 8 check questions"), can look through the questions and delete bad ones
 is required of them. Unchanged files keep their questions. On this laptop a full check takes
 about 18 minutes; on the pilot server, about a minute.
 
-**Next:** in step 3, the teacher's settings for the assistant (persona); then real sign-in
-and the Moodle connector (step 4). Fixes for the weak spots above (on both courses, answers
+**Step 3, last piece (2026-11-17): the teacher's settings.** A teacher can set how the
+assistant talks: "ti" or "Vi", how long its answers are, how much it helps with exercises
+(never full solutions), examples, terminology, topics it should always pass to the teacher,
+and a few lines of their own. They try the settings on a test question first; when they
+activate them, the system answers a sample of questions with the new settings and switches
+only if the assistant still passes on what it must not answer and still answers the course
+material. Tried on the demo course: a topic set to go to the teacher was passed on, answers
+got shorter, and the check passed (all 12 "must not answer" questions passed on).
+
+**Next:** real sign-in (Microsoft/Google for teachers) and the Moodle connector (step 4),
+then the pilot server. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -200,6 +209,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Question queue (step 3) | Teacher API: forwarded questions with the reason, answer with optional sources (checked against the course's files) or dismiss; no student identity shown; the student sees the teacher's answer in their history |
+| Teacher's settings (step 3) | Persona: ti/Vi, answer length, help with exercises, examples, terminology, topics passed to the teacher, free text; preview; activation only after a check that forwarding and answering still work |
 | Web pages (step 3) | React + Vite: teacher pages (courses, upload, review, approve, publish, question queue) and the student chat (AI notice, progress, answer with sources, teacher answers); runs in a dev container on port 5173 |
 | Student chat (step 3) | Chat API: answers from the live version only, server-sent progress then the checked answer with citations, AI notice first, forwarded questions to the teacher queue, own history, 👍/👎 |
 | Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |

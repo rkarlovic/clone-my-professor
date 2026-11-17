@@ -52,6 +52,46 @@ export interface CheckQuestion {
   created_at: string;
 }
 
+export interface PersonaSettings {
+  address: "vi" | "ti";
+  answer_length: "short" | "medium" | "long";
+  exercise_help: "hints" | "guided" | "concepts";
+  examples: boolean;
+  terminology: string;
+  forward_topics: string[];
+}
+
+export interface PersonaCheckItem {
+  kind: string;
+  question: string;
+  forwarded: string | null;
+  answer: string;
+  expected: string | null;
+  cites_expected: boolean;
+}
+
+export interface PersonaReport {
+  passed: boolean;
+  reasons: string[];
+  check_questions?: number;
+  answered?: number;
+  generic?: number;
+  forwarded?: number;
+  items?: PersonaCheckItem[];
+  seconds?: number;
+}
+
+export interface Persona {
+  version: number;
+  status: "draft" | "checking" | "active" | "rejected" | "retired";
+  settings: PersonaSettings;
+  free_text: string;
+  prompt_text: string;
+  created_at: string;
+  activated_at: string | null;
+  check_report: PersonaReport | null;
+}
+
 export interface SourceRef {
   file_name: string;
   page: number | null;
@@ -156,6 +196,41 @@ export const teacherApi = {
     request<QueueItem>("teacher", `/api/courses/${kb}/questions/${id}/dismiss`, { method: "POST" }),
 };
 
+/** POST that answers with server-sent events; calls onEvent for each until the stream ends. */
+async function streamPost(
+  role: Role,
+  path: string,
+  body: unknown,
+  onEvent: (e: SseEvent) => void,
+): Promise<void> {
+  const headers = { ...devHeaders(role), "Content-Type": "application/json" };
+  const r = await fetch(path, { method: "POST", headers, body: json(body) });
+  if (!r.ok || !r.body) throw new ApiError(r.status, await errorText(r));
+  const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    const { events, rest } = parseSse(buffer);
+    buffer = rest;
+    events.forEach(onEvent);
+  }
+}
+
+export const personaApi = {
+  list: (kb: string) => request<Persona[]>("teacher", `/api/courses/${kb}/persona`),
+  save: (kb: string, settings: PersonaSettings, free_text: string) =>
+    request<Persona>("teacher", `/api/courses/${kb}/persona`, {
+      method: "PUT",
+      body: json({ settings, free_text }),
+    }),
+  activate: (kb: string, n: number) =>
+    request<Persona>("teacher", `/api/courses/${kb}/persona/${n}/activate`, { method: "POST" }),
+  preview: (kb: string, n: number, question: string, onEvent: (e: SseEvent) => void) =>
+    streamPost("teacher", `/api/courses/${kb}/persona/${n}/preview`, { question }, onEvent),
+};
+
 // --- student -----------------------------------------------------------------------------
 
 export const studentApi = {
@@ -167,23 +242,6 @@ export const studentApi = {
       body: json({ helpful }),
     }),
   /** Ask a question; calls onEvent for each server-sent event until the answer or an error. */
-  ask: async (kb: string, question: string, onEvent: (e: SseEvent) => void): Promise<void> => {
-    const headers = { ...devHeaders("student"), "Content-Type": "application/json" };
-    const r = await fetch(`/api/chat/${kb}/messages`, {
-      method: "POST",
-      headers,
-      body: json({ question }),
-    });
-    if (!r.ok || !r.body) throw new ApiError(r.status, await errorText(r));
-    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
-    let buffer = "";
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += value;
-      const { events, rest } = parseSse(buffer);
-      buffer = rest;
-      events.forEach(onEvent);
-    }
-  },
+  ask: (kb: string, question: string, onEvent: (e: SseEvent) => void) =>
+    streamPost("student", `/api/chat/${kb}/messages`, { question }, onEvent),
 };

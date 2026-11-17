@@ -39,3 +39,13 @@ def enqueue_checks(kb_version_id: uuid.UUID, kb_id: uuid.UUID) -> int:
     return check_version.configure(
         lock=f"kb:{kb_id}", queueing_lock=f"check:{kb_version_id}"
     ).defer(kb_version_id=str(kb_version_id))
+
+
+def enqueue_persona_check(persona_id: uuid.UUID, kb_id: uuid.UUID) -> int:
+    """Queue the activation check of a persona (answers a sample with it, then activates or
+    rejects it)."""
+    from jobs.tasks import check_persona
+
+    return check_persona.configure(lock=f"kb:{kb_id}", queueing_lock=f"persona:{persona_id}").defer(
+        persona_id=str(persona_id)
+    )

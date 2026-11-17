@@ -39,7 +39,7 @@ def _events(body: str) -> list[tuple[str, dict]]:
 
 
 def _fake(answered: bool, seen: list):
-    def answer_fn(version_id, question, on_stage=None):
+    def answer_fn(version_id, question, on_stage=None, **_):
         seen.append(version_id)
         for stage in ("scope", "search", "answer", "check"):
             on_stage(stage)

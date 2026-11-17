@@ -149,3 +149,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .checks { list-style: none; padding: 0; }
 .checks li { display: flex; gap: 8px; align-items: baseline; padding: 6px 4px; border-bottom: 1px solid var(--line); }
 .checks li.missed { background: var(--bad-bg); }
+.persona-form { display: flex; flex-direction: column; gap: 10px; }
+.persona-form fieldset { border: none; padding: 0; margin: 0; display: flex; gap: 16px; align-items: center; }
+.persona-form legend { font-size: 0.9rem; margin-bottom: 4px; }
+label.inline { flex-direction: row; align-items: center; gap: 6px; }
+.prompt-text { white-space: pre-wrap; font-size: 0.85rem; background: var(--bg); padding: 8px; border-radius: 6px; }
+.report-items { padding-left: 1.2rem; }
+.report-items p { margin: 2px 0 8px; }
+.bubble.preview { max-width: 100%; margin-top: 8px; }
+.tabs { flex-wrap: wrap; }

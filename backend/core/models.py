@@ -200,3 +200,21 @@ class CheckQuestion(Base):
     trace: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PersonaConfig(Base):
+    """The teacher's settings for how the clone talks (instruction layer 2), versioned."""
+
+    __tablename__ = "persona_config"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    # draft | checking | active | rejected | retired
+    status: Mapped[str] = mapped_column(String(20), default="draft")
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict)
+    free_text: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    check_report: Mapped[dict | None] = mapped_column(JSONB)
