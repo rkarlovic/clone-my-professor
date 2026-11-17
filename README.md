@@ -50,8 +50,8 @@ used with permission and never stored in this repository. Two question sets:
   When it answered them, the clone gave 57 of 60 an answer; most of those cite the right
   slide or the one next to it. It forwarded 11 of the 12 questions it must not answer. The one it
   missed: "do I have to come to the exercises?" got the answer "yes, attendance is required",
-  guessed from the timetable slide. Questions about attendance must go to the teacher; this
-  is the next fix.
+  guessed from the timetable slide. Attendance questions now go straight to the teacher, like
+  questions about grades and deadlines.
 
 **Latest results** (2026-11-15):
 

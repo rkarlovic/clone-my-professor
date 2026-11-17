@@ -113,6 +113,10 @@ def test_answer_prompt_formats() -> None:
         "Kada je rok za predaju domaće zadaće 7?",
         "Kad je kolokvij?",
         "Kako se računa ocjena?",
+        "jel se mora dolazit na vjezbe",
+        "Mogu li dobiti potpis ako sam izostao s tri predavanja?",
+        "Je li prisutnost na predavanjima obavezna?",
+        "Jesu li vježbe obavezne?",
     ],
 )
 def test_admin_terms_forward_without_the_model(monkeypatch: pytest.MonkeyPatch, question) -> None:
@@ -130,6 +134,9 @@ def test_admin_terms_forward_without_the_model(monkeypatch: pytest.MonkeyPatch, 
         "Kako upisati tekst u datoteku?",
         "Što se dogodi ako test ne prođe u JUnitu?",
         "Kako proći kroz listu iteratorom?",
+        "Kako provjeriti prisutnost elementa u skupu?",
+        "Što je potpis metode?",
+        "Što se dogodi kad dolazi do iznimke na kraju metode?",
     ],
 )
 def test_programming_words_are_not_admin_terms(question) -> None:

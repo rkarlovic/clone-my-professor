@@ -69,7 +69,12 @@ SCOPE_FORWARDS_AT_ONCE = {ForwardReason.admin}
 # On the first subject the 4B labelled "Koliko bodova trebam skupiti za četvorku?" GRADIVO.
 ADMIN_TERMS = re.compile(
     r"\b(ocjen\w*|bodov\w*|kolokvij\w*|dvojk\w*|trojk\w*|četvork\w*|petic\w*|rok\w* za\b|"
-    r"rokov\w*|ispitn\w* rok\w*|datum\w* ispita)",
+    r"rokov\w*|ispitn\w* rok\w*|datum\w* ispita|"
+    # attendance, only next to a class word: "prisutnost" alone is also an element in a set,
+    # "potpis" alone a method signature
+    r"(dolaz|prisutn|izost)\w* (na|s|sa) (\w+ )?(predavanj|vje[žz]b|nastav|seminar)\w*|"
+    r"(predavanj|vje[žz]b|nastav)\w* (je |su )?obavez\w*|obavez\w* (dolaz|prisutn)\w*|"
+    r"(dobi\w*|dati|daje\w*) potpis\w*)",
     re.IGNORECASE,
 )
 # A refusal written as prose instead of NE_ZNAM: the first sentence says the sources do not

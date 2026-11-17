@@ -659,6 +659,12 @@ Decisions made in step 1:
       inferred from the timetable slide (2+1 h × 15 weeks). The scope check said GRADIVO, and
       `ADMIN_TERMS` has no attendance words. This is a rule 2 failure (attendance is the
       teacher's to answer), and the claim itself is not on the slide.
+    - **Fix (2026-11-17): attendance words in `ADMIN_TERMS`**, only next to a class word
+      ("dolaz-/prisutn-/izost- na/s … predavanj-/vježb-/vjezb-/nastav-/seminar-", "vježbe su
+      obavezne", "obavezan dolazak", "dobiti potpis"): bare "prisutnost" (an element in a set)
+      and "potpis" (method signature) are course terms. Over all 184 questions (golden, teacher,
+      check) it matches only g03 and g06 in addition to the earlier admin questions; so g06 now
+      forwards `admin` without a model call. Not re-run end to end (no model call is involved).
     - Judge numbers are as rough as before (the 9B judge; see the judge review).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
@@ -678,7 +684,7 @@ Next:
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
    rule tried and reverted, judge prompt wording does not help (see above); the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets: generator and first set done (retrieval measured, see above);
-   answer run on it done (abstain 11/12: attendance question g06 answered); left: hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
+   answer run on it done (abstain 11/12; the missed attendance question g06 now forwards via `ADMIN_TERMS`); left: hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
