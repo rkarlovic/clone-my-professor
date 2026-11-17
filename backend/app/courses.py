@@ -1,19 +1,27 @@
 """Teacher API: courses (knowledge bases), uploads and versions (build step 3).
 
 An upload never changes what students see: it becomes a new *draft* version (rule 5) that a
-background job processes; approval and activation are a separate step.
+background job processes. The teacher then approves it and activates it (students get only the
+active version); a draft they do not want can be discarded. See core/approval.py.
 """
 
 import uuid
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import TeacherDep
+from core.approval import (
+    ApprovalError,
+    activate_version,
+    active_version,
+    approve_version,
+    discard_version,
+)
 from core.db import app_engine, kb_scope
 from core.kb import NothingChanged, StillProcessing, create_upload_version
 from core.models import Document, IngestStatus, KbVersion, KnowledgeBase
@@ -30,6 +38,7 @@ class CourseIn(BaseModel):
 class CourseOut(BaseModel):
     id: uuid.UUID
     subject_name: str
+    active_version: int | None = None  # what students get; None until one is activated
 
 
 class DocumentOut(BaseModel):
@@ -44,6 +53,8 @@ class VersionOut(BaseModel):
     ingest_error: str | None
     created_at: datetime
     pending_files: list[str]  # uploaded in this version (processed or still to process)
+    approved_at: datetime | None = None
+    activated_at: datetime | None = None
     summary: dict | None = None  # from the ingest report, once ready
     documents: list[DocumentOut] | None = None  # only on the detail view, once ready
 
@@ -79,6 +90,8 @@ def _out(v: KbVersion, documents: list[DocumentOut] | None = None) -> VersionOut
         ingest_error=v.ingest_error,
         created_at=v.created_at,
         pending_files=[f["file_name"] for f in v.pending_files],
+        approved_at=v.approved_at,
+        activated_at=v.activated_at,
         summary=_summary(v.ingest_report),
         documents=documents,
     )
@@ -100,7 +113,17 @@ def list_courses(teacher: TeacherDep) -> list[CourseOut]:
             .where(KnowledgeBase.teacher_id == teacher.id)
             .order_by(KnowledgeBase.subject_name)
         ).all()
-        return [CourseOut(id=k.id, subject_name=k.subject_name) for k in kbs]
+        out = []
+        for k in kbs:
+            active = active_version(s, k.id)
+            out.append(
+                CourseOut(
+                    id=k.id,
+                    subject_name=k.subject_name,
+                    active_version=active.version if active else None,
+                )
+            )
+        return out
 
 
 @router.get("/{kb_id}/versions")
@@ -177,3 +200,35 @@ def _queue(version: KbVersion, kb_id: uuid.UUID) -> VersionOut:
             v.ingest_error = f"could not queue processing: {type(e).__name__}"
         return _out(v)
     return _out(version)
+
+
+def _step(kb_id: uuid.UUID, number: int, teacher_id: uuid.UUID, action) -> VersionOut:
+    with Session(app_engine(), expire_on_commit=False) as s, s.begin():
+        _own_course(s, teacher_id, kb_id)
+        v = _version(s, kb_id, number)
+        try:
+            action(s, v)
+        except ApprovalError as e:
+            raise HTTPException(409, str(e)) from e
+    return _out(v)
+
+
+@router.post("/{kb_id}/versions/{number}/approve")
+def approve(kb_id: uuid.UUID, number: int, teacher: TeacherDep) -> VersionOut:
+    """The teacher has reviewed this processed draft (files, sections, summary). Students still
+    do not see it until it is activated."""
+    return _step(kb_id, number, teacher.id, lambda s, v: approve_version(s, v, teacher.id))
+
+
+@router.post("/{kb_id}/versions/{number}/activate")
+def activate(kb_id: uuid.UUID, number: int, teacher: TeacherDep) -> VersionOut:
+    """Students get this approved version from now on; the previous active one stays approved
+    and can be activated again (rollback)."""
+    return _step(kb_id, number, teacher.id, activate_version)
+
+
+@router.delete("/{kb_id}/versions/{number}", status_code=status.HTTP_204_NO_CONTENT)
+def discard(kb_id: uuid.UUID, number: int, teacher: TeacherDep) -> Response:
+    """Discard a draft (never an approved or active version)."""
+    _step(kb_id, number, teacher.id, discard_version)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from core.db import kb_scope
@@ -18,6 +18,7 @@ from core.models import Chunk, Document, IngestStatus, KbVersion, KnowledgeBase
 from core.settings import get_settings
 from core.storage import StoredFile, UploadError, clean_file_name, store_upload
 from ingestion.pipeline import copy_documents
+from tests.conftest import ready_version_with
 
 
 @pytest.fixture
@@ -71,59 +72,6 @@ def test_store_refuses_bad_files(
 # --- versions from uploads (database) -------------------------------------------------------
 
 
-@pytest.fixture
-def course(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, str]]:
-    """A teacher with one empty course; everything under it is removed afterwards."""
-    teacher, kb, name = uuid.uuid4(), uuid.uuid4(), f"test-{uuid.uuid4().hex[:8]}"
-    with owner_engine.begin() as conn:
-        conn.execute(
-            text("INSERT INTO teacher (id, name) VALUES (:t, :n)"), {"t": teacher, "n": name}
-        )
-        conn.execute(
-            text("INSERT INTO knowledge_base (id, teacher_id, subject_name) VALUES (:k, :t, 'T')"),
-            {"k": kb, "t": teacher},
-        )
-    yield kb, name
-    with owner_engine.begin() as conn:
-        p = {"k": kb}
-        versions = "SELECT id FROM kb_version WHERE kb_id = :k"
-        conn.execute(text(f"DELETE FROM chunk WHERE kb_version_id IN ({versions})"), p)
-        conn.execute(text(f"DELETE FROM document WHERE kb_version_id IN ({versions})"), p)
-        conn.execute(text("UPDATE kb_version SET base_version_id = NULL WHERE kb_id = :k"), p)
-        conn.execute(text("DELETE FROM kb_version WHERE kb_id = :k"), p)
-        conn.execute(text("DELETE FROM knowledge_base WHERE id = :k"), p)
-        conn.execute(text("DELETE FROM teacher WHERE name = :n"), {"n": name})
-
-
-def _ready_version_with(app_engine: Engine, kb_id: uuid.UUID, files: dict[str, str]) -> uuid.UUID:
-    """A processed version holding documents {file_name: file_hash}, each with a parent and a
-    child chunk."""
-    with Session(app_engine) as s, s.begin():
-        v = KbVersion(kb_id=kb_id, version=1, ingest_status=IngestStatus.ready)
-        s.add(v)
-        s.flush()
-        vid = v.id
-    with kb_scope(vid, app_engine) as s:
-        for name, digest in files.items():
-            d = Document(kb_version_id=vid, file_name=name, file_hash=digest)
-            s.add(d)
-            s.flush()
-            parent = Chunk(kb_version_id=vid, document_id=d.id, text=f"{name} section")
-            s.add(parent)
-            s.flush()
-            s.add(
-                Chunk(
-                    kb_version_id=vid,
-                    document_id=d.id,
-                    parent_id=parent.id,
-                    text=f"{name} slide",
-                    page_or_slide=3,
-                    embedding=[0.5] * 1024,
-                )
-            )
-    return vid
-
-
 def _stored(name: str, digest: str) -> StoredFile:
     return StoredFile(name, digest, Path(f"/store/{digest}.pdf"), 1)
 
@@ -131,7 +79,7 @@ def _stored(name: str, digest: str) -> StoredFile:
 @pytest.mark.db
 def test_upload_version_processes_only_new_or_changed_files(app_engine: Engine, course) -> None:
     kb_id, _ = course
-    base = _ready_version_with(app_engine, kb_id, {"a.pdf": "h-a", "b.pdf": "h-b"})
+    base = ready_version_with(app_engine, kb_id, {"a.pdf": "h-a", "b.pdf": "h-b"})
     with Session(app_engine) as s, s.begin():
         kb = s.get(KnowledgeBase, kb_id)
         with pytest.raises(NothingChanged):
@@ -154,7 +102,7 @@ def test_carry_over_copies_documents_and_chunks_into_the_new_version(
     app_engine: Engine, course
 ) -> None:
     kb_id, _ = course
-    base = _ready_version_with(app_engine, kb_id, {"a.pdf": "h-a", "b.pdf": "h-b"})
+    base = ready_version_with(app_engine, kb_id, {"a.pdf": "h-a", "b.pdf": "h-b"})
     with Session(app_engine) as s, s.begin():
         new = KbVersion(kb_id=kb_id, version=2, base_version_id=base)
         s.add(new)

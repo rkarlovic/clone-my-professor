@@ -4,7 +4,10 @@ from collections.abc import Iterator
 import pytest
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 
+from core.db import kb_scope
+from core.models import Chunk, Document, IngestStatus, KbVersion
 from core.settings import get_settings
 
 
@@ -58,3 +61,59 @@ def two_kb_versions(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, uuid.UUID
             text("DELETE FROM knowledge_base WHERE id IN (:a, :b)"), {"a": kb_a, "b": kb_b}
         )
         conn.execute(text("DELETE FROM teacher WHERE id = :t"), {"t": teacher})
+
+
+@pytest.fixture
+def course(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, str]]:
+    """A teacher with one empty course; everything under it is removed afterwards."""
+    teacher, kb, name = uuid.uuid4(), uuid.uuid4(), f"test-{uuid.uuid4().hex[:8]}"
+    with owner_engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO teacher (id, name) VALUES (:t, :n)"), {"t": teacher, "n": name}
+        )
+        conn.execute(
+            text("INSERT INTO knowledge_base (id, teacher_id, subject_name) VALUES (:k, :t, 'T')"),
+            {"k": kb, "t": teacher},
+        )
+    yield kb, name
+    with owner_engine.begin() as conn:
+        p = {"k": kb}
+        versions = "SELECT id FROM kb_version WHERE kb_id = :k"
+        conn.execute(text(f"DELETE FROM chunk WHERE kb_version_id IN ({versions})"), p)
+        conn.execute(text(f"DELETE FROM document WHERE kb_version_id IN ({versions})"), p)
+        conn.execute(text("UPDATE kb_version SET base_version_id = NULL WHERE kb_id = :k"), p)
+        conn.execute(text("DELETE FROM kb_version WHERE kb_id = :k"), p)
+        conn.execute(text("DELETE FROM knowledge_base WHERE id = :k"), p)
+        # also the "<name>-other" teachers the API tests create through the dev header
+        conn.execute(text("DELETE FROM teacher WHERE name LIKE :n"), {"n": name + "%"})
+
+
+def ready_version_with(
+    app_engine: Engine, kb_id: uuid.UUID, files: dict[str, str], version: int = 1
+) -> uuid.UUID:
+    """A processed version holding documents {file_name: file_hash}, each with a parent and a
+    child chunk."""
+    with Session(app_engine) as s, s.begin():
+        v = KbVersion(kb_id=kb_id, version=version, ingest_status=IngestStatus.ready)
+        s.add(v)
+        s.flush()
+        vid = v.id
+    with kb_scope(vid, app_engine) as s:
+        for name, digest in files.items():
+            d = Document(kb_version_id=vid, file_name=name, file_hash=digest)
+            s.add(d)
+            s.flush()
+            parent = Chunk(kb_version_id=vid, document_id=d.id, text=f"{name} section")
+            s.add(parent)
+            s.flush()
+            s.add(
+                Chunk(
+                    kb_version_id=vid,
+                    document_id=d.id,
+                    parent_id=parent.id,
+                    text=f"{name} slide",
+                    page_or_slide=3,
+                    embedding=[0.5] * 1024,
+                )
+            )
+    return vid

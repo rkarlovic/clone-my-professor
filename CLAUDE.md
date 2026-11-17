@@ -807,7 +807,29 @@ Decisions made in step 1:
   - v3: a broken PDF → `failed` with "broken.pdf: the file could not be read (damaged,
     password-protected or not really this type)"; the full error, with server paths, goes only
     to the worker log. The retry re-queued it.
-- Not yet: approval and activation (next), the auto-generated check set after ingest, the
+**Step 3, part 2: approval and activation (2026-11-17).**
+- `core/approval.py`: draft → **approve** (only a processed draft; records `approved_at`,
+  `approved_by`, and `document.approved_at`) → **activate** (only an approved version; the
+  previous active version goes back to `approved` in the same transaction, so students never
+  see none or two; `activated_at`). Re-activating an older approved version is the
+  **rollback**. **Discard** deletes a draft's documents and chunks (never an approved or active
+  version, which stay as history; refused while it or a version built on it is processing;
+  stored files stay, they are shared by content). Each step locks the course row; document
+  and version rows change in one transaction (`core.db.scope_transaction`). Migration `0008`.
+- `active_version(kb_id)` is what students get (the chat endpoint will use only that).
+- Uploads now build on the newest processed **draft newer than the active version** (so
+  unreviewed uploads stack), else on the active version (also after a rollback), else the
+  newest processed version.
+- API: `POST …/versions/{n}/approve`, `POST …/versions/{n}/activate`,
+  `DELETE …/versions/{n}` (draft only); versions show `approved_at` / `activated_at`, courses
+  show `active_version`. 409 with a reason for a step the state does not allow.
+- Tests (`tests/test_approval.py`, 5): approve → activate → rollback, only a processed draft is
+  approvable, discard never touches approved versions or other versions, where uploads stack,
+  the API flow and ownership. End-to-end with the server and worker: upload → refused
+  activation before approval → approve → activate → second upload (carries the first file
+  over) → activate (v1 back to approved, course shows active 2) → rollback → discarding the
+  approved v2 refused.
+- Not yet: the auto-generated check set after ingest, the
   teacher deleting a file from a version, solution tagging for uploads (the folder rule only
   applies to `scripts.ingest`), context sentences for uploads (off), containers for
   `api`/`worker`, the frontend.

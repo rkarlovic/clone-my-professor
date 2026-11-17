@@ -97,6 +97,9 @@ class KbVersion(Base):
     # Unchanged documents of this version are copied from here (no re-processing).
     base_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("kb_version.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Document(Base):

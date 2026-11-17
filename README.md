@@ -132,8 +132,13 @@ version that students do not see yet. Files that did not change are copied over 
 previous version instead of being processed again. There is no sign-in yet (a stand-in
 for development) and no web page yet: it is used through the API.
 
-**Next:** in step 3, the teacher's approval of a draft (and making it live), the automatic
-test questions after each upload, the teacher's question queue, the student chat window
+**Step 3, second piece (2026-11-17): approval.** A processed draft goes live only in two
+steps by the teacher: *approve* (they have checked the files) and *activate* (students get
+it from now on). Exactly one version is live at a time; activating a new one retires the
+old one, which can be made live again if something is wrong. A draft the teacher does not
+want can be thrown away; approved versions are kept as history.
+
+**Next:** in step 3, the automatic test questions after each upload, the teacher's question queue, the student chat window
 and the teacher's settings. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
@@ -161,7 +166,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
-| Upload (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
+| Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |

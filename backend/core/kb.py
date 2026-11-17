@@ -62,13 +62,25 @@ def find_version(session: Session, subject: str, version: int | None = None) -> 
 
 
 def base_version(session: Session, kb_id: uuid.UUID) -> KbVersion | None:
-    """What a new upload builds on: the active version, else the newest processed one."""
+    """What a new upload builds on. A processed draft newer than the active version holds the
+    teacher's latest uploads (not reviewed yet), so uploads stack on the newest such draft;
+    otherwise the active version (also after a rollback to an older one); with neither, the
+    newest processed version."""
     versions = session.scalars(
         select(KbVersion).where(KbVersion.kb_id == kb_id).order_by(KbVersion.version.desc())
     ).all()
-    active = [v for v in versions if v.status == KbVersionStatus.active]
+    active = next((v for v in versions if v.status == KbVersionStatus.active), None)
     ready = [v for v in versions if v.ingest_status == IngestStatus.ready]
-    return (active or ready or [None])[0]
+    newer_drafts = [
+        v
+        for v in ready
+        if v.status == KbVersionStatus.draft and (active is None or v.version > active.version)
+    ]
+    if newer_drafts:
+        return newer_drafts[0]
+    if active:
+        return active
+    return ready[0] if ready else None
 
 
 def create_upload_version(

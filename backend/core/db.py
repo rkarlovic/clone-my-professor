@@ -27,3 +27,11 @@ def kb_scope(kb_version_id: uuid.UUID, engine: Engine | None = None) -> Iterator
             {"v": str(kb_version_id)},
         )
         yield session
+
+
+def scope_transaction(session: Session, kb_version_id: uuid.UUID) -> None:
+    """Pin the session's *current* transaction to one kb_version (like `kb_scope`), for work
+    that must change document/chunk rows and kb_version rows atomically."""
+    session.execute(
+        text("SELECT set_config('app.kb_version_id', :v, true)"), {"v": str(kb_version_id)}
+    )
