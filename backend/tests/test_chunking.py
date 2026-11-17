@@ -201,3 +201,22 @@ def test_settings_are_respected() -> None:
         [page(1, "A", "kratko"), page(2, "B", BODY)], "S", words, ChunkSettings(min_tokens=1)
     )
     assert [c.pages for c in chunks] == [[1], [2]]
+
+
+def test_clean_text_drops_empty_bullet_lines() -> None:
+    assert clean_text("Tekst\n\n-\n\n- -\n– •\nkraj") == "Tekst\n\nkraj"
+    assert clean_text("| a | b |\n|---|---|") == "| a | b |\n|---|---|"  # tables stay
+
+
+def test_split_long_splits_one_long_paragraph_by_sentences() -> None:
+    text = " ".join(f"Rečenica broj {i} ima pet." for i in range(40))  # 200 words, no breaks
+    pieces = split_long(text, words, max_tokens=50, overlap=0.1)
+    assert len(pieces) > 3 and all(words(p) <= 50 for p in pieces)
+    assert all(p.startswith("Rečenica") for p in pieces)  # cut at sentence ends
+
+
+def test_split_long_falls_back_to_word_windows_without_sentence_ends() -> None:
+    text = " ".join(f"pojam{i} - opis pojma" for i in range(100))  # a flattened glossary
+    pieces = split_long(text, words, max_tokens=60, overlap=0.1)
+    assert all(words(p) <= 60 for p in pieces)
+    assert " ".join(pieces).split() == text.split()  # nothing lost, no overlap needed

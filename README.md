@@ -53,6 +53,28 @@ used with permission and never stored in this repository. Two question sets:
   guessed from the timetable slide. Attendance questions now go straight to the teacher, like
   questions about grades and deadlines.
 
+**Second course (2026-11-17):** *Rad s darovitom djecom* (working with gifted children; 12
+PowerPoint lectures and two long official PDF guidelines), a very different kind of material, to
+check that nothing is tuned to the Java course. Also used with permission and never stored here.
+Question sets: the teacher's 89 study questions plus 13 more from old exams, 30 questions
+students wrote, 5 exam questions from another subject (in Italian) that the clone must not
+answer, and the automatic set of 60 + 12.
+
+- The pipeline handled PowerPoint without changes to its logic; three small fixes: lecture
+  names now come from file names, empty bullet lines are dropped, and very long text pages are
+  split by sentence.
+- Search finds the right slide for 89 % of the teacher's questions, 100 % of the students'
+  questions (they reuse the slides' wording) and 83 % of the automatic set. Most automatic-set
+  misses are broad questions about the long PDF guidelines, where many pages fit.
+- **The tricks that helped on the Java course do not help here.** The extra sentence describing
+  each slide made search worse (89 % → 84 %): on a course about one topic, every slide got almost
+  the same sentence. The keyword search and the slower re-ranking did not improve results either.
+  So the simplest setup is the best one here, and those tricks stay switched off by default.
+- 28 of the teacher's questions are answered only in the course handbook, which is not part of
+  the material. Their search scores look just like those of answerable questions, so only the
+  answer step can send them to the teacher. That is the next thing to measure, on a sample of
+  about 40 questions (each answer takes about two minutes on this laptop).
+
 **Latest results** (2026-11-15):
 
 | What we measured | Result |
@@ -87,8 +109,8 @@ Everything stopped goes to the teacher's question queue.
   instructions did not make it more reliable; a stronger grader model is the likely fix.
 - A few slides themselves are outdated or contain errors; that list goes to the teacher.
 
-**Next:** a second course of a different kind (to check nothing is tuned to this one), fixes for
-the weak spots above, the teacher's review of the question set, then step 3: chat window, teacher
+**Next:** answers on the second course (especially the questions only the handbook answers),
+fixes for the weak spots above, the teacher's review of the question set, then step 3: chat window, teacher
 dashboard and upload. Choosing the final AI model waits for the pilot server.
 
 ## Principles

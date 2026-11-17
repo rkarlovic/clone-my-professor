@@ -12,7 +12,14 @@ from sqlalchemy.orm import Session
 from core.db import app_engine, kb_scope
 from core.kb import create_draft_version, get_or_create_kb
 from core.models import Chunk, ContentType, Document
-from ingestion.chunking import ChunkDraft, ChunkSettings, Page, build_chunks, slides_from_docling
+from ingestion.chunking import (
+    ChunkDraft,
+    ChunkSettings,
+    Page,
+    build_chunks,
+    section_name,
+    slides_from_docling,
+)
 from ingestion.parse import (
     SUPPORTED_SUFFIXES,
     PdfTextLayer,
@@ -80,11 +87,12 @@ def is_solutions_file(path: Path, source_dir: Path) -> bool:
 
 def load_pages(path: Path, doc) -> list[Page]:
     outline = pdf_outline(path)
+    label = section_name(path.name)
     if path.suffix.lower() != ".pdf":
-        return slides_from_docling(doc, outline)
+        return slides_from_docling(doc, outline, default_section=label)
     text_layer = PdfTextLayer(path, doc)
     try:
-        return slides_from_docling(doc, outline, code_text=text_layer)
+        return slides_from_docling(doc, outline, code_text=text_layer, default_section=label)
     finally:
         text_layer.close()
 

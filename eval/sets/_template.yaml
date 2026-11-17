@@ -9,6 +9,8 @@ questions:
   - id: q001
     question: "Što je derivacija funkcije?"
     type: answerable          # answerable | out_of_scope | admin (grades/deadlines/exams -> escalate)
+                              # | not_in_materials (course topic, but the materials do not
+                              #   answer it, e.g. only the handbook does -> forward)
     difficulty: easy          # easy (worded like the slide) | hard (paraphrase, symptom, English, ...)
     expected_sources:         # any of these counts as a hit for recall@k
       - document: "predavanje-03.pdf"

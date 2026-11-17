@@ -6,7 +6,8 @@
 answerable questions -> recall@k (any expected source in the top k) and MRR, per difficulty
 (easy / hard: student-style questions; exam: written by the teacher as exam practice;
 check: auto-generated from the slides, see scripts.checkset).
-out_of_scope / admin -> best retrieval score, to calibrate the abstention threshold (step 2).
+out_of_scope / admin / not_in_materials -> best retrieval score, to calibrate the abstention
+threshold (step 2).
 --set: another set file for the same subject (default eval/sets/<subject>.yaml), e.g. a local,
 git-ignored one in eval/sets/local/ made from a teacher's own questions.
 Report: eval/reports/<subject>/eval-v<N>[-<set>][-hybrid][-rerankM]-k<K>-<timestamp>.json
@@ -40,7 +41,7 @@ class Source(BaseModel):
 class Question(BaseModel):
     id: str
     question: str
-    type: Literal["answerable", "out_of_scope", "admin"]
+    type: Literal["answerable", "out_of_scope", "admin", "not_in_materials"]
     difficulty: Literal["easy", "hard", "exam", "check"] = "easy"
     expected_sources: list[Source] = []
     reference_answer: str | None = None
@@ -63,6 +64,12 @@ class GoldenSet(BaseModel):
             for s in q.expected_sources:
                 s.document = s.document or self.default_document
         return self
+
+
+def short_name(file_name: str) -> str:
+    """'7 Identifikacija.pptx' -> '7 Identifikacija': enough to tell a course's files apart."""
+    stem = Path(file_name).stem
+    return stem if len(stem) <= 24 else stem[:23] + "…"
 
 
 def main() -> None:
@@ -108,10 +115,12 @@ def main() -> None:
                 "difficulty": q.difficulty,
                 "question": q.question,
                 "expected_pages": sorted(p for _, p in expected),
+                "expected": sorted(expected),
                 "rank": rank,
                 "top_score": round(hits[0].score, 4) if hits else None,
                 "top": [
                     {
+                        "document": h.file_name,
                         "page": h.page,
                         "also_on": h.also_on,
                         "score": round(h.score, 4),
@@ -180,11 +189,18 @@ def main() -> None:
     for name in ("easy", "hard", "exam", "check", "all"):
         if name in summary:
             print(f"  {name:5} {summary[name]}")
+    # With several files, page numbers repeat across them: name the file too.
+    many = len({t["document"] for r in results for t in r["top"]}) > 1
+
+    def where(doc: str, page: int) -> str:
+        return f"{short_name(doc)}:{page}" if many else str(page)
+
     print("  misses:")
     for r in results:
         if r["type"] == "answerable" and r["rank"] is None:
-            got = ", ".join(str(t["page"]) for t in r["top"])
-            print(f"    {r['id']} expected {r['expected_pages']} got [{got}]  {r['question']}")
+            want = ", ".join(where(d, p) for d, p in r["expected"])
+            got = ", ".join(where(t["document"], t["page"]) for t in r["top"])
+            print(f"    {r['id']} expected [{want}] got [{got}]  {r['question']}")
     print(f"  abstain top scores: {summary['abstain']['top_scores']}")
     print(f"  lowest top score among answerable: {summary['abstain']['answerable_top_score_min']}")
     print(f"  {report['seconds']:.0f}s for {len(results)} questions")

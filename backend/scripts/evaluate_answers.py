@@ -4,7 +4,7 @@
         [--hybrid] [--set PATH] [--ids e01,h20] [--difficulty hard] [--limit N] [--judge]
 
 answerable -> answered (not forwarded); cited_expected (the answer cites an expected source).
-out_of_scope / admin -> forwarded (and with which reason).
+out_of_scope / admin / not_in_materials -> forwarded (and with which reason).
 --judge -> the `judge` role checks each answer against the slides it cites: grounded (everything
 it claims is in them) and on_topic (it answers the question). No reference answers are used.
 Each question runs the `fast` and `answer` roles (~80 s on a CPU laptop with dev models; --judge

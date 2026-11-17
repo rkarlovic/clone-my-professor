@@ -672,13 +672,65 @@ Decisions made in step 1:
   check and `--judge`, ~2 h 50 min for the
   teacher's 60, and ~40 s more per question with hybrid + rerank 20.
 
+**Second subject `Rad_s_darovitom_djecom` (2026-11-17): retrieval measured, answers pending.**
+- Material: 12 PPTX lectures + 2 long official PDF guidelines ("Okvir za poticanje…"), 586
+  pages/slides → **419 chunks** (all ≤ 800 tokens). v1 = no context; v2 = `--context`
+  (**5,924 s**, context 5,631 s ≈ 13.4 s per chunk, embedding 281 s). Sparse for both (349 s /
+  427 s). 26 of 83 slides of the NTC lecture are pictures without text (a `vision` role job).
+- Pipeline changes it needed (generic, no fitting to this course): a file without PDF
+  bookmarks (all PPTX) takes its **file name as the section label** (`section_name`); empty
+  bullet lines (`- -`) dropped in `clean_text`; a block over `max_tokens` with no paragraph
+  breaks is split by sentence and, failing that (glossary pages without punctuation), into word
+  windows (`_word_windows`). `scripts.evaluate` names the file next to the page in misses when a
+  subject has several files (pages repeat across files). Separation checked: each subject's
+  search returns only its own files.
+- Question sets (all in `eval/sets/local/`, git-ignored; built from the teacher's files in
+  `data/.questions/Rad_s_darovitom_djecom/`, student lists/results and files named after a
+  student left out, rule 9):
+  - `.teacher.yaml` (107): t01–t89 the teacher's 2025/26 study Q&A, x01–x13 questions from
+    2014–16 written exams not already among them, i01–i05 Italian exam questions of another
+    subject (docimologia) as `out_of_scope`. **28 are `not_in_materials`** (new type): course
+    topics answered only in the handbook/readings, which are not in the material ("bez
+    priručnika"); they must be forwarded. 74 answerable, difficulty `exam`;
+    `expected_sources` marked by Claude from the slide text, not yet confirmed by the teacher.
+  - `.students.yaml` (30): questions students wrote (`PITANJAstudenti.docx`), 28 answerable.
+  - `.check.yaml`: auto-generated, 60 + 12 generic, from v2 in **1,280 s** (21 min).
+- Retrieval, recall@5 / MRR, k=5:
+
+  | mode                | teacher v1  | teacher v2  | check v1    | check v2    |
+  |---------------------|-------------|-------------|-------------|-------------|
+  | dense               | **0.89 / 0.75** | 0.84 / 0.71 | **0.83 / 0.64** | 0.78 / 0.67 |
+  | hybrid              | 0.80 / 0.64 | 0.86 / 0.68 | 0.73 / 0.54 | 0.77 / 0.57 |
+  | dense + rerank 20   | 0.88 / 0.74 | 0.85 / 0.72 |             |             |
+  | hybrid + rerank 20  | 0.86 / 0.74 | 0.82 / 0.70 |             |             |
+
+  Students set: recall@5 1.00 in all four dense/hybrid runs (MRR 0.90–1.00): students reuse the
+  slides' wording, so it behaves like an easy set. Rerank runs took 2,294–3,400 s per 107
+  questions (21–32 s per question) and were not run on the students or check sets.
+  - **The Java course's gains are not confirmed.** `--context` hurts dense (0.89 → 0.84): the
+    context sentence ends generically ("Tekst se direktno uklapa u temu predavanja o radu s
+    darovitim djecom…"), and on a one-topic course that makes every chunk alike. Hybrid in rank
+    fusion hurts (as on Java); as a rerank pool it does not help; rerank alone does not help.
+    Best here: **v1 dense**, the default. `--context` and `--hybrid` stay opt-in; the sparse
+    experiment was to be removed if a second subject did not confirm it (decision pending).
+  - Teacher-set misses are mostly multi-part or broad questions and neighbouring slides
+    (t25, t26, t39, t49, t55, t61, x01, x05, x10 on v1 dense). Check-set misses on v1 dense:
+    10, none with a neighbour in the top 5; 7 of them are broad questions about the two Okvir
+    PDFs, where many pages fit and one expected page is too strict. By style: symptom 4,
+    casual/English/no_diacritics 2 each.
+  - Abstention by score, again not separable: v1 dense, answerable top scores ≥ 0.52 but
+    `not_in_materials` / Italian up to 0.71; on the check set the generic questions (max 0.54)
+    sit just under the answerable minimum (0.56). Rerank gives a `not_in_materials` question
+    (t33) 0.99.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
    teacher, not a retrieval one.
-2. Ingest a second subject to check the pipeline generalises (labels, chunking, RLS separation)
-   and to confirm or drop the `--context` and hybrid-as-rerank-pool gains. Prefer a different
-   material type (PPTX, text/articles, maths) and add its set to the internal benchmark.
+2. Second subject (`Rad_s_darovitom_djecom`, PPTX + PDF) ingested and retrieval measured (see
+   above): `--context` and hybrid not confirmed. Left: an answer run on a sample (~40 questions,
+   v1 dense: answerable, `not_in_materials`, Italian, generic), above all whether the 28
+   handbook-only questions get forwarded; decide whether to drop the sparse experiment.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence

@@ -24,6 +24,10 @@ TokenCounter = Callable[[str], int]
 
 _PRIVATE_USE = re.compile("[-]")  # bullet glyphs from symbol fonts
 _IMAGE_MARKER = re.compile(r"^\s*<!-- image -->\s*$", re.MULTILINE)
+# Sentence boundary for splitting an over-long paragraph: after . ! ? ; before a capital or digit.
+_SENTENCE_END = re.compile(r"(?<=[.!?;])\s+(?=[A-ZČĆŽŠĐ0-9„\"(])")
+# A line that is only bullets/dashes: empty list items from PPTX placeholders.
+_EMPTY_BULLETS = re.compile(r"^[ 	]*[-–•*]+(?:[ 	]+[-–•*]+)*[ 	]*$", re.MULTILINE)
 _CONTINUATION = re.compile(r"\s*\((?:\d+|\d+\s*/\s*\d+)\)\s*$")  # "Title (2)", "Title (1/3)"
 _LECTURE_NUMBER = re.compile(r"^(?P<num>\d+[a-z]?)[_\s]+(?:\d{4}\s+)?(?P<rest>.*)$")
 _TRAILING_PAREN = re.compile(r"\s*-?\s*\([^()]*\)\s*$")
@@ -126,6 +130,7 @@ def _section_for_page(index: list[tuple[int, str]], page: int) -> str:
 def clean_text(text: str) -> str:
     text = _PRIVATE_USE.sub("", text)
     text = _IMAGE_MARKER.sub("", text)
+    text = _EMPTY_BULLETS.sub("", text)
     text = re.sub(r"[ \t]+\n", "\n", text)
     text = re.sub(r"^(\s*[-*])\s+", r"\1 ", text, flags=re.MULTILINE)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
@@ -154,10 +159,15 @@ def _render_item(doc: DoclingDocument, item, code_text: CodeTextSource | None) -
 
 
 def slides_from_docling(
-    doc: DoclingDocument, outline: list[OutlineEntry], code_text: CodeTextSource | None = None
+    doc: DoclingDocument,
+    outline: list[OutlineEntry],
+    code_text: CodeTextSource | None = None,
+    default_section: str = "",
 ) -> list[Page]:
     """One Page per page/slide, built in a single pass over the document (Docling's
-    per-page Markdown export re-walks the whole document for every page)."""
+    per-page Markdown export re-walks the whole document for every page). Pages before the
+    first bookmark, or in a file without bookmarks (PPTX, most DOCX), get `default_section`:
+    the file's own label when a teacher keeps one lecture per file."""
     by_page: dict[int, list] = {p: [] for p in range(1, doc.num_pages() + 1)}
     for item, _ in doc.iterate_items():
         if getattr(item, "prov", None):
@@ -184,7 +194,7 @@ def slides_from_docling(
                 page=page_no,
                 title=clean_text(title_item.text) if title_item else "",
                 body=clean_text(body),
-                section=_section_for_page(sections, page_no),
+                section=_section_for_page(sections, page_no) or default_section,
                 images=sum(i.label == DocItemLabel.PICTURE for i in items),
             )
         )
@@ -337,6 +347,23 @@ def merge_tiny(pages: list[Page], count: TokenCounter, min_tokens: int) -> list[
     return units
 
 
+def _word_windows(block: str, count: TokenCounter, max_tokens: int) -> list[str]:
+    """`block` unchanged if it fits or is code, else consecutive word windows that fit."""
+    if block.lstrip().startswith("```") or count(block) <= max_tokens:
+        return [block]
+    words = block.split()
+    size = max(1, int(len(words) * max_tokens / count(block) * 0.9))
+    out: list[str] = []
+    i = 0
+    while i < len(words):
+        n = size
+        while n > 1 and count(" ".join(words[i : i + n])) > max_tokens:
+            n = int(n * 0.9)
+        out.append(" ".join(words[i : i + n]))
+        i += n
+    return out
+
+
 def split_long(text: str, count: TokenCounter, max_tokens: int, overlap: float) -> list[str]:
     """Split by blank-line paragraphs into pieces <= max_tokens, repeating the tail of the
     previous piece (~overlap). Code fences are never split."""
@@ -353,6 +380,20 @@ def split_long(text: str, count: TokenCounter, max_tokens: int, overlap: float) 
             buf.append(line)
     if buf:
         blocks.append("\n".join(buf))
+    # A paragraph that alone is too long (a glossary Docling read as one paragraph) is split
+    # into sentences; code is left whole (recipe step 3).
+    blocks = [
+        s
+        for b in blocks
+        for s in (
+            _SENTENCE_END.split(b)
+            if not b.lstrip().startswith("```") and count(b) > max_tokens
+            else [b]
+        )
+    ]
+    # Last resort, for text with no sentence ends either (a glossary flattened into one run of
+    # "term - definition term - definition"): windows of words that fit.
+    blocks = [w for b in blocks for w in _word_windows(b, count, max_tokens)]
 
     pieces: list[str] = []
     current: list[str] = []
