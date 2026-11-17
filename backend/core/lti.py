@@ -247,8 +247,9 @@ def link_course(
     kb_id: uuid.UUID,
 ) -> PlatformContextMap:
     """Link an LMS course to one of the teacher's CMP courses (many LMS courses -> one KB)."""
-    kb = session.get(KnowledgeBase, kb_id)
-    if kb is None or kb.teacher_id != teacher_id:
+    from core.access import teaches
+
+    if session.get(KnowledgeBase, kb_id) is None or not teaches(session, teacher_id, kb_id):
         raise LtiError("that CMP course is not yours")
     if linked_course(session, platform_id, context_id):
         raise LtiError("this LMS course is already linked")

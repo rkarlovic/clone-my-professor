@@ -204,6 +204,9 @@ Moodle suddenly lists no files at all, nothing is removed (that is more likely a
 problem). Tried with the local Moodle: a lecture hidden in Moodle was gone from what
 students get after the next check, and the previous version stayed available.
 
+**Several teachers (2026-11-18).** A course can have more than one teacher. Every teacher of
+the Moodle course who opens CMP joins the linked course automatically and can manage it.
+
 **Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
 Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question

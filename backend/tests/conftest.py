@@ -75,6 +75,10 @@ def course(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, str]]:
             text("INSERT INTO knowledge_base (id, teacher_id, subject_name) VALUES (:k, :t, 'T')"),
             {"k": kb, "t": teacher},
         )
+        conn.execute(
+            text("INSERT INTO course_teacher (kb_id, teacher_id, role) VALUES (:k, :t, 'owner')"),
+            {"k": kb, "t": teacher},
+        )
     yield kb, name
     with owner_engine.begin() as conn:
         p = {"k": kb}

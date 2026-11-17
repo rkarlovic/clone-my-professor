@@ -15,6 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import TeacherDep
+from core.access import courses_of, teacher_count, teaches
+from core.access import create_course as new_course
 from core.approval import (
     ApprovalError,
     activate_version,
@@ -46,6 +48,7 @@ class CourseOut(BaseModel):
     id: uuid.UUID
     subject_name: str
     active_version: int | None = None  # what students get; None until one is activated
+    teachers: int = 1  # teachers who may manage the course
 
 
 class DocumentOut(BaseModel):
@@ -75,7 +78,7 @@ class VersionOut(BaseModel):
 
 def _own_course(s: Session, teacher_id: uuid.UUID, kb_id: uuid.UUID) -> KnowledgeBase:
     kb = s.get(KnowledgeBase, kb_id)
-    if kb is None or kb.teacher_id != teacher_id:
+    if kb is None or not teaches(s, teacher_id, kb_id):
         raise HTTPException(404, "course not found")  # same answer whether absent or not yours
     return kb
 
@@ -122,19 +125,14 @@ def _out(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_course(body: CourseIn, teacher: TeacherDep) -> CourseOut:
     with Session(app_engine(), expire_on_commit=False) as s, s.begin():
-        kb = KnowledgeBase(teacher_id=teacher.id, subject_name=body.subject_name.strip())
-        s.add(kb)
+        kb = new_course(s, teacher.id, body.subject_name)
     return CourseOut(id=kb.id, subject_name=kb.subject_name)
 
 
 @router.get("")
 def list_courses(teacher: TeacherDep) -> list[CourseOut]:
     with Session(app_engine()) as s:
-        kbs = s.scalars(
-            select(KnowledgeBase)
-            .where(KnowledgeBase.teacher_id == teacher.id)
-            .order_by(KnowledgeBase.subject_name)
-        ).all()
+        kbs = s.scalars(courses_of(teacher.id)).all()
         out = []
         for k in kbs:
             active = active_version(s, k.id)
@@ -143,6 +141,7 @@ def list_courses(teacher: TeacherDep) -> list[CourseOut]:
                     id=k.id,
                     subject_name=k.subject_name,
                     active_version=active.version if active else None,
+                    teachers=teacher_count(s, k.id),
                 )
             )
         return out

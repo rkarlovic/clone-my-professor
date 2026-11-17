@@ -8,6 +8,7 @@ export interface Course {
   id: string;
   subject_name: string;
   active_version: number | null;
+  teachers?: number;
 }
 
 export interface VersionSummary {

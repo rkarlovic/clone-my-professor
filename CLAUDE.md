@@ -1067,7 +1067,7 @@ sign-in (see "Not yet" lists above).
   teacher's hash only.
 - Not yet: Moodle Web Services polling (part 2), Microsoft/Google sign-in for teachers using
   CMP directly (needs app registrations by the institution), several teachers per course
-  (only the course's owner gets in; a co-teacher's launch sees an empty course list), the LTI
+  (done in part 4), the LTI
   launch in an iframe (tested in the replace-window mode), deep linking, a dynamic-registration
   flow and an admin page for platforms.
 
@@ -1145,6 +1145,18 @@ LMS leaves the live version **at once**, without the teacher's approval (rule 5 
 - **Live (local Moodle)**: v2 (two Moodle lectures + the teacher's upload) published; lecture
   "12 Predrasude" hidden in Moodle; "Provjeri sada" → v3 without it, published automatically;
   students get "7 Identifikacija" + "9 Osnovne potrebe"; v2 stays for rollback.
+
+**Step 4, part 4: several teachers per course (2026-11-18).**
+- `course_teacher` (migration `0016`, owners copied in): every teacher on a course's list may
+  manage it (materials, approval, queue, settings, sync); `role` owner | teacher and
+  `added_via` owner | lti are kept for later rules. `core/access.py` (`teaches`,
+  `courses_of`, `add_teacher`, `create_course`) replaces every `kb.teacher_id` check.
+- An instructor of an already linked LMS course joins its CMP course on their first launch
+  (the LMS vouches for them) and goes straight to the course page. Course list shows
+  "N nastavnika" when there are several.
+- Test: a second instructor's launch → straight to the linked course, listed with 2 teachers,
+  may read its versions.
+- Not yet: removing a teacher from a course, adding one without an LMS (dev or SSO).
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see

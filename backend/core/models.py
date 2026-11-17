@@ -282,3 +282,14 @@ class LmsFile(Base):
     timemodified: Mapped[int] = mapped_column(BigInteger)
     file_hash: Mapped[str | None] = mapped_column(String(64))
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CourseTeacher(Base):
+    """A teacher who may manage a course (several per course)."""
+
+    __tablename__ = "course_teacher"
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"), primary_key=True)
+    teacher_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("teacher.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(20), default="teacher")  # owner | teacher
+    added_via: Mapped[str] = mapped_column(String(20), default="owner")  # owner | lti
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

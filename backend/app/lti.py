@@ -20,10 +20,10 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import _bearer
+from core.access import add_teacher, courses_of, create_course
 from core.db import app_engine
 from core.lti import (
     LtiError,
@@ -35,7 +35,6 @@ from core.lti import (
     tool_jwks,
     tool_urls,
 )
-from core.models import KnowledgeBase
 from core.sessions import issue
 from core.settings import get_settings
 
@@ -81,6 +80,9 @@ def launch(id_token: Annotated[str, Form()], state: Annotated[str, Form()]):
             if result.is_teacher:
                 teacher = teacher_for(s, result)
                 kb_id = linked_course(s, result.platform_id, result.context_id)
+                if kb_id:
+                    # an instructor of a linked LMS course joins its CMP course (the LMS vouches)
+                    add_teacher(s, kb_id, teacher.id, added_via="lti")
                 s.commit()
                 if kb_id:
                     token = issue(result.user_ref, "teacher", teacher_id=teacher.id)
@@ -145,11 +147,7 @@ class LinkOut(BaseModel):
 def link_info(claims: LinkClaims) -> LinkInfo:
     teacher_id = uuid.UUID(claims["teacher_id"])
     with Session(app_engine()) as s:
-        rows = s.scalars(
-            select(KnowledgeBase)
-            .where(KnowledgeBase.teacher_id == teacher_id)
-            .order_by(KnowledgeBase.subject_name)
-        ).all()
+        rows = s.scalars(courses_of(teacher_id)).all()
         courses = [CourseChoice(id=k.id, subject_name=k.subject_name) for k in rows]
     return LinkInfo(context_title=claims["link"].get("context_title"), courses=courses)
 
@@ -164,10 +162,7 @@ def link(body: LinkIn, claims: LinkClaims) -> LinkOut:
         with Session(app_engine()) as s, s.begin():
             kb_id = body.kb_id
             if kb_id is None:
-                kb = KnowledgeBase(teacher_id=teacher_id, subject_name=body.new_course_name.strip())
-                s.add(kb)
-                s.flush()
-                kb_id = kb.id
+                kb_id = create_course(s, teacher_id, body.new_course_name).id
             link_course(
                 s,
                 teacher_id,

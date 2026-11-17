@@ -53,8 +53,8 @@ def platform(owner_engine: Engine, monkeypatch: pytest.MonkeyPatch):
             )
         ]
         # only what this test created: its own LMS teacher (by the hash of its test user id)
-        ref = {"r": user_ref(ISSUER, "teacher-1")}
-        mine = "SELECT id FROM teacher WHERE external_ref = :r"
+        ref = {"r": user_ref(ISSUER, "teacher-1"), "r2": user_ref(ISSUER, "teacher-2")}
+        mine = "SELECT id FROM teacher WHERE external_ref IN (:r, :r2)"
         c.execute(text("DELETE FROM platform_context_map WHERE platform_id = :p"), {"p": pid})
         c.execute(text("DELETE FROM lti_login_state WHERE platform_id = :p"), {"p": pid})
         theirs = f"SELECT id FROM knowledge_base WHERE teacher_id IN ({mine})"
@@ -149,6 +149,15 @@ def test_teacher_links_the_course_then_students_get_its_chat(http, platform, app
     # the teacher's next launch goes straight to the course page
     r, _ = _launch(http, platform, sub="teacher-1", roles=teacher_roles)
     assert _fragment(r)["next"] == f"teacher/{kb_id}"
+
+    # a second instructor of the same LMS course joins the CMP course on their first launch
+    r, _ = _launch(http, platform, sub="teacher-2", roles=teacher_roles)
+    co = _fragment(r)
+    assert co["next"] == f"teacher/{kb_id}"
+    co_auth = {"Authorization": f"Bearer {co['token']}"}
+    listed = http.get("/api/courses", headers=co_auth).json()
+    assert [(c["subject_name"], c["teachers"]) for c in listed] == [("Darovitost", 2)]
+    assert http.get(f"/api/courses/{kb_id}/versions", headers=co_auth).status_code == 200
 
     # a student: the chat of the linked course only
     r, _ = _launch(http, platform)

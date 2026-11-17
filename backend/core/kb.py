@@ -33,10 +33,9 @@ def get_or_create_kb(session: Session, subject: str) -> KnowledgeBase:
         teacher = Teacher(name=SPIKE_TEACHER)
         session.add(teacher)
         session.flush()
-    kb = KnowledgeBase(teacher_id=teacher.id, subject_name=subject)
-    session.add(kb)
-    session.flush()
-    return kb
+    from core.access import create_course
+
+    return create_course(session, teacher.id, subject)
 
 
 def create_draft_version(session: Session, kb_id: uuid.UUID) -> KbVersion:

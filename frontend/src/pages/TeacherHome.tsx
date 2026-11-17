@@ -56,6 +56,9 @@ export function TeacherHome() {
                   ) : (
                     <span className="badge">nije objavljen</span>
                   )}
+                  {(c.teachers ?? 1) > 1 && (
+                    <span className="badge">{c.teachers} nastavnika</span>
+                  )}
                 </li>
               ))}
             </ul>
