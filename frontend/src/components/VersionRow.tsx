@@ -70,6 +70,14 @@ export function VersionRow({
           {v.pending_files.join(", ")}
         </p>
       )}
+      {(v.removed_files ?? []).length > 0 && (
+        <p className="small">
+          {v.auto_activate
+            ? "Uklonjeno jer više nije u sustavu za učenje (objavljeno automatski): "
+            : "Uklonjeno u ovoj verziji: "}
+          {v.removed_files!.join(", ")}
+        </p>
+      )}
       {v.ingest_error && <p className="error">{v.ingest_error}</p>}
       {v.summary && (
         <p className="small muted">
@@ -143,6 +151,24 @@ export function VersionRow({
                 {d.file_name}
                 {detail.summary?.carried_over.includes(d.file_name) && (
                   <span className="muted"> (preneseno)</span>
+                )}
+                {v.is_base && (detail.documents ?? []).length > 1 && (
+                  <>
+                    {" "}
+                    <button
+                      type="button"
+                      className="link"
+                      disabled={working}
+                      onClick={() =>
+                        run(
+                          () => teacherApi.remove(kbId, [d.file_name]),
+                          `Napraviti novu verziju bez datoteke „${d.file_name}”? Studenti je i dalje imaju dok novu verziju ne odobrite i objavite.`,
+                        )
+                      }
+                    >
+                      Ukloni
+                    </button>
+                  </>
                 )}
               </li>
             ))}

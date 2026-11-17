@@ -24,7 +24,13 @@ from core.approval import (
 )
 from core.checks import delete_question
 from core.db import app_engine, kb_scope
-from core.kb import NothingChanged, StillProcessing, create_upload_version
+from core.kb import (
+    NothingChanged,
+    StillProcessing,
+    base_version,
+    create_removal_version,
+    create_upload_version,
+)
 from core.models import CheckQuestion, Document, IngestStatus, KbVersion, KnowledgeBase
 from core.storage import UploadError, store_upload
 from jobs import enqueue_ingest
@@ -55,6 +61,9 @@ class VersionOut(BaseModel):
     created_at: datetime
     pending_files: list[str]  # uploaded in this version (processed or still to process)
     origin: str = "upload"  # upload (the teacher's) | lms (found by the material sync)
+    removed_files: list[str] = []  # left out of the version it was built from
+    auto_activate: bool = False  # published without the teacher (LMS removals only)
+    is_base: bool = False  # new uploads and removals build on this version
     approved_at: datetime | None = None
     activated_at: datetime | None = None
     # The background check: queued | running | done | failed (None: not run); its result
@@ -87,7 +96,9 @@ def _summary(report: dict | None) -> dict | None:
     return {k: report.get(k) for k in keys}
 
 
-def _out(v: KbVersion, documents: list[DocumentOut] | None = None) -> VersionOut:
+def _out(
+    v: KbVersion, documents: list[DocumentOut] | None = None, base_id: uuid.UUID | None = None
+) -> VersionOut:
     return VersionOut(
         version=v.version,
         status=v.status.value,
@@ -96,6 +107,9 @@ def _out(v: KbVersion, documents: list[DocumentOut] | None = None) -> VersionOut
         created_at=v.created_at,
         pending_files=[f["file_name"] for f in v.pending_files],
         origin=v.origin,
+        removed_files=list(v.removed_files or []),
+        auto_activate=v.auto_activate,
+        is_base=base_id is not None and v.id == base_id,
         approved_at=v.approved_at,
         activated_at=v.activated_at,
         check_status=v.check_status,
@@ -141,7 +155,8 @@ def list_versions(kb_id: uuid.UUID, teacher: TeacherDep) -> list[VersionOut]:
         versions = s.scalars(
             select(KbVersion).where(KbVersion.kb_id == kb_id).order_by(KbVersion.version.desc())
         ).all()
-        return [_out(v) for v in versions]
+        base = base_version(s, kb_id)
+        return [_out(v, base_id=base.id if base else None) for v in versions]
 
 
 @router.get("/{kb_id}/versions/{number}")
@@ -283,3 +298,22 @@ def delete_check(kb_id: uuid.UUID, question_id: uuid.UUID, teacher: TeacherDep) 
         if not delete_question(s, kb_id, question_id):
             raise HTTPException(404, "check question not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class RemoveIn(BaseModel):
+    file_names: list[str] = Field(min_length=1, max_length=200)
+
+
+@router.post("/{kb_id}/remove", status_code=status.HTTP_202_ACCEPTED)
+def remove_files(kb_id: uuid.UUID, body: RemoveIn, teacher: TeacherDep) -> VersionOut:
+    """A new draft without these files (built on the newest version; nothing is re-processed).
+    Students keep the published version until the teacher approves and publishes the draft."""
+    with Session(app_engine(), expire_on_commit=False) as s, s.begin():
+        kb = _own_course(s, teacher.id, kb_id)
+        try:
+            version = create_removal_version(s, kb, set(body.file_names))
+        except NothingChanged as e:
+            raise HTTPException(409, str(e)) from e
+        except StillProcessing as e:
+            raise HTTPException(409, str(e)) from e
+    return _queue(version, kb_id)

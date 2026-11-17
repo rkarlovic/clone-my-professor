@@ -23,9 +23,24 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from connectors.base import Connector, Material
+from core.approval import active_version
 from core.db import app_engine, kb_scope
-from core.kb import NothingChanged, StillProcessing, base_version, create_upload_version
-from core.models import Document, KnowledgeBase, LmsFile, LtiPlatform, PlatformContextMap
+from core.kb import (
+    NothingChanged,
+    StillProcessing,
+    base_version,
+    create_removal_version,
+    create_upload_version,
+)
+from core.models import (
+    Document,
+    KbVersion,
+    KbVersionStatus,
+    KnowledgeBase,
+    LmsFile,
+    LtiPlatform,
+    PlatformContextMap,
+)
 from core.settings import get_settings
 from core.storage import StoredFile, UploadError, store_upload
 
@@ -68,8 +83,9 @@ def sync_course(
     enqueue: Callable[[uuid.UUID, uuid.UUID], object] | None = None,
 ) -> dict:
     """One sync of a linked course. Returns (and stores on the link) a report with `status`:
-    new_version | unchanged | busy (an earlier version is still processing; next time) |
-    not_configured | failed."""
+    removed (files gone from the LMS left the live version) | new_version | unchanged |
+    busy (an earlier version is still processing; next time) | not_configured | failed.
+    A removal and new files never happen in one run: removals first, new files next time."""
     from jobs import enqueue_ingest
 
     enqueue = enqueue or enqueue_ingest
@@ -107,19 +123,45 @@ def sync_course(
             _remember(map_id, m, name, stored.file_hash)
         report |= {"files": len(materials), "downloaded": downloaded, "skipped": skipped}
 
+        _forget_missing(map_id, {m.external_id for m in materials})
+
+        # 1. Files the sync brought in that are gone from every linked LMS course (deleted or
+        #    hidden) leave the live version at once, without waiting for the teacher.
+        source, gone = _gone_files(kb_id, map_id, set(names.values()))
+        if gone and not materials:
+            # An empty listing is more likely a permission or network problem than a teacher
+            # deleting everything: remove nothing.
+            report["removal_skipped"] = "the LMS returned no files; nothing removed"
+            gone = set()
+        if gone:
+            published = source.status == KbVersionStatus.active  # else: a newer draft
+            with Session(app_engine(), expire_on_commit=False) as s, s.begin():
+                kb = s.get(KnowledgeBase, kb_id)
+                version = create_removal_version(
+                    s,
+                    kb,
+                    gone,
+                    from_version=s.get(KbVersion, source.id),
+                    origin="lms",
+                    auto_activate=published,
+                )
+            enqueue(version.id, kb_id)
+            report |= {
+                "status": "removed",
+                "version": version.version,
+                "removed_files": sorted(version.removed_files),
+                "published": published,
+            }
+            _finish(map_id, report)  # new files, if any, come with the next sync
+            return report
+
+        # 2. New or changed files become a draft for the teacher.
         with Session(app_engine()) as s:
             base = base_version(s, kb_id)
         in_course: dict[str, str] = {}
         if base:
             with kb_scope(base.id) as ks:
                 in_course = dict(ks.execute(select(Document.file_name, Document.file_hash)).all())
-        lms_names = set(names.values())
-        report["missing_in_lms"] = (
-            sorted(n for n, _ in _lms_documents(base.id).items() if n not in lms_names)
-            if base
-            else []
-        )
-
         new = [f for f in files if in_course.get(f.file_name) != f.file_hash]
         if not new:
             report["status"] = "unchanged"
@@ -168,6 +210,41 @@ class _Stream(io.RawIOBase):
         else:
             out, self._buffer = self._buffer[:size], self._buffer[size:]
         return out
+
+
+def _gone_files(
+    kb_id: uuid.UUID, map_id: uuid.UUID, here: set[str]
+) -> tuple[KbVersion | None, set[str]]:
+    """Documents that came from an LMS and are in none of the course's linked LMS courses any
+    more (not in this course's current listing, nor last seen in another linked course), and the
+    version to remove them from: the live version if it has any (published at once), else a
+    newer draft that has some (a new draft, so the teacher cannot publish them by approving the
+    old one). The teacher's own uploads are never included."""
+    with Session(app_engine(), expire_on_commit=False) as s:
+        live = active_version(s, kb_id)
+        newest = base_version(s, kb_id)
+        elsewhere = set(
+            s.scalars(
+                select(LmsFile.file_name)
+                .join(PlatformContextMap, PlatformContextMap.id == LmsFile.map_id)
+                .where(PlatformContextMap.kb_id == kb_id, LmsFile.map_id != map_id)
+            )
+        )
+    for version in (live, newest):
+        if version is None:
+            continue
+        gone = {n for n in _lms_documents(version.id) if n not in here and n not in elsewhere}
+        if gone:
+            return version, gone
+    return None, set()
+
+
+def _forget_missing(map_id: uuid.UUID, present: set[str]) -> None:
+    """Drop the remembered files this LMS course no longer lists."""
+    with Session(app_engine()) as s, s.begin():
+        for row in s.scalars(select(LmsFile).where(LmsFile.map_id == map_id)):
+            if row.external_id not in present:
+                s.delete(row)
 
 
 def _lms_documents(version_id: uuid.UUID) -> dict[str, str]:

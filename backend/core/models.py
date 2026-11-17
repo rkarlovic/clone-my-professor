@@ -103,6 +103,9 @@ class KbVersion(Base):
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     origin: Mapped[str] = mapped_column(String(20), default="upload")  # upload | lms
+    # file names this version leaves out of its base version
+    removed_files: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]")
+    auto_activate: Mapped[bool] = mapped_column(default=False)  # LMS removals only
     # Background check after processing: queued | running | done | failed (None: never run)
     check_status: Mapped[str | None] = mapped_column(String(20))
     check_report: Mapped[dict | None] = mapped_column(JSONB)

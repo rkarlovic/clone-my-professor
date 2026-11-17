@@ -361,17 +361,19 @@ def process_version(
         kb = s.get(KnowledgeBase, version.kb_id)
         subject, version_no, kb_id = kb.subject_name, version.version, kb.id
         base_id, pending = version.base_version_id, list(version.pending_files)
+        removed = set(version.removed_files or [])
         version.ingest_status, version.ingest_error = IngestStatus.processing, None
 
     report = IngestReport(subject, str(version_id), version_no, asdict(options), _models(options))
     try:
         _clear_version(version_id)  # a retry starts clean
-        replaced = {f["file_name"] for f in pending}
+        replaced = {f["file_name"] for f in pending} | removed  # removed: not carried over
         if base_id:
             with kb_scope(base_id) as s:
                 names = set(s.scalars(select(Document.file_name)).all())
             report.carried_over = copy_documents(base_id, version_id, names - replaced)
-        count_tokens = embedding_token_counter()
+        # Only files to parse need the tokenizer (a removal version just copies documents).
+        count_tokens = embedding_token_counter() if pending else None
         cache_dir = get_settings().upload_dir / str(kb_id) / ".cache"
         for f in pending:
             log.info("v%d: processing %s", version_no, f["file_name"])

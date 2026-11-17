@@ -67,3 +67,28 @@ test("a running check is announced", () => {
   buttons({ check_status: "running" });
   expect(screen.getByText(/Provjera asistenta u tijeku/)).toBeInTheDocument();
 });
+
+test("the newest version offers removing a file; a removal says what it removed", async () => {
+  const { default: userEvent } = await import("@testing-library/user-event");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      new Response(
+        JSON.stringify({ ...base, documents: [{ file_name: "a.pdf", file_hash: "1" }, { file_name: "b.pdf", file_hash: "2" }] }),
+      ),
+    ),
+  );
+  render(
+    <ul>
+      <VersionRow
+        kbId="kb"
+        version={{ ...base, is_base: true, removed_files: ["c.pdf"], auto_activate: true }}
+        onChanged={() => {}}
+      />
+    </ul>,
+  );
+  expect(screen.getByText(/više nije u sustavu za učenje/)).toHaveTextContent("c.pdf");
+  await userEvent.click(screen.getByRole("button", { name: "Pregledaj" }));
+  expect(await screen.findAllByRole("button", { name: "Ukloni" })).toHaveLength(2);
+  vi.unstubAllGlobals();
+});

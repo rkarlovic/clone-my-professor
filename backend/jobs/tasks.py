@@ -15,6 +15,7 @@ def ingest_version(kb_version_id: str) -> None:
     from ingestion.pipeline import process_version  # heavy imports (Docling) only in workers
 
     report = process_version(uuid.UUID(kb_version_id))
+    _auto_publish(uuid.UUID(kb_version_id))
     _queue_checks(uuid.UUID(kb_version_id))
     if report:
         log.info(
@@ -110,3 +111,15 @@ def poll_lms(timestamp: int) -> None:
     for map_id, kb_id in links:
         enqueue_sync(map_id, kb_id)
     log.info("LMS poll: %d linked course(s) queued", len(links))
+
+
+def _auto_publish(version_id: uuid.UUID) -> None:
+    """Versions the LMS sync made to remove files go live once processed (see core.approval)."""
+    from sqlalchemy.orm import Session
+
+    from core.approval import auto_publish
+    from core.db import app_engine
+    from core.models import KbVersion
+
+    with Session(app_engine()) as s, s.begin():
+        auto_publish(s, s.get(KbVersion, version_id))

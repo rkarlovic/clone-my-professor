@@ -1111,10 +1111,40 @@ sign-in (see "Not yet" lists above).
   version 1 stayed live; processed and checked; a second "Provjeri sada" → "nema novih ni
   promijenjenih datoteka", 2 files seen, 0 downloaded. The worker registered the 20-minute poll
   and ran it.
-- Not yet: removing files that disappeared from the LMS (needs dropping files from a
-  version), the "auto-add from selected sections" rule, notifications to the teacher about a
+- Not yet (removal: see part 3 below): the "auto-add from selected sections" rule, notifications to the teacher about a
   new draft (it shows on the course page), folders' nested files beyond what
   `core_course_get_contents` returns, SRCE/Merlin (needs their approval and a token).
+
+**Step 4, part 3: removing files (2026-11-18).** Decided with the user: a file gone from the
+LMS leaves the live version **at once**, without the teacher's approval (rule 5 is about what
+*enters* a live version); the teacher's own uploads are never removed by the sync.
+- Versions can leave files out: `kb_version.removed_files` (migration `0015`, with
+  `auto_activate`); `core.kb.create_removal_version` builds on a given version (default: the
+  base) and refuses to remove the last file; the ingest job copies the other documents
+  (nothing parsed; the tokenizer is not even loaded).
+- Teacher: "Ukloni" next to each file of the version new changes build on (`is_base` on the
+  version list) → `POST /api/courses/{kb_id}/remove` → a **draft** without it, approved and
+  published as usual.
+- Sync: a document with `source_platform = "lms"` that is in none of the course's linked LMS
+  courses any more (not in this listing, not last seen in another link; `lms_file` rows now
+  follow each listing) is removed. From the **live** version → a version with
+  `auto_activate`, published by the worker as soon as it is copied (`core.approval.auto_publish`,
+  `approved_by` = None); if only a newer **draft** has it → a new draft without it (not
+  published: it carries the draft's unapproved additions). Hidden in the LMS counts as gone.
+  Safeguard: an empty LMS listing removes nothing (`removal_skipped`). A removal and new files
+  never happen in one run: removals first, new files at the next sync.
+- A draft older than the live version can no longer be approved (it would bring back what was
+  removed since); the message tells the teacher to upload again or check the LMS.
+- Pages: versions say "Uklonjeno jer više nije u sustavu za učenje (objavljeno automatski)" or
+  "Uklonjeno u ovoj verziji"; the LMS box reports removals and a skipped removal.
+- Tests (`tests/test_removal.py`, 4): gone from the LMS → removed from live and published by
+  the system, the teacher's upload and a file still in another linked course stay; an empty
+  listing removes nothing; a teacher's removal is a draft (and another removal waits while it
+  processes), `is_base`, a stale draft cannot be approved; a file gone before the teacher
+  approved a Moodle draft → a new draft without it. Frontend: the "Ukloni" buttons.
+- **Live (local Moodle)**: v2 (two Moodle lectures + the teacher's upload) published; lecture
+  "12 Predrasude" hidden in Moodle; "Provjeri sada" → v3 without it, published automatically;
+  students get "7 Identifikacija" + "9 Osnovne potrebe"; v2 stays for rollback.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see

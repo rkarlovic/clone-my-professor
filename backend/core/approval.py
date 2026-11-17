@@ -47,9 +47,19 @@ def active_version(session: Session, kb_id: uuid.UUID) -> KbVersion | None:
     ).first()
 
 
-def approve_version(session: Session, version: KbVersion, teacher_id: uuid.UUID) -> KbVersion:
-    """The teacher has reviewed a processed draft (its files, sections and summary)."""
+def approve_version(
+    session: Session, version: KbVersion, teacher_id: uuid.UUID | None
+) -> KbVersion:
+    """The teacher has reviewed a processed draft (its files, sections and summary).
+    `teacher_id` None: approved by the system (an LMS removal, see `auto_publish`)."""
     _lock(session, version)
+    active = active_version(session, version.kb_id)
+    if active is not None and version.version < active.version:
+        raise ApprovalError(
+            f"version {version.version} is older than the published version {active.version} "
+            "and would bring back what changed since; upload the files again (or check the "
+            "learning platform)"
+        )
     if version.status != KbVersionStatus.draft:
         raise ApprovalError(f"version {version.version} is already {version.status.value}")
     if version.ingest_status != IngestStatus.ready:
@@ -116,3 +126,13 @@ def discard_version(session: Session, version: KbVersion) -> None:
     )
     session.delete(version)
     session.flush()
+
+
+def auto_publish(session: Session, version: KbVersion) -> None:
+    """Publish a processed version marked `auto_activate` (an LMS removal) without the teacher."""
+    if not version.auto_activate or version.ingest_status != IngestStatus.ready:
+        return
+    if version.status == KbVersionStatus.draft:
+        approve_version(session, version, None)
+    if version.status == KbVersionStatus.approved:
+        activate_version(session, version)

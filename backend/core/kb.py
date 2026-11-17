@@ -83,22 +83,27 @@ def base_version(session: Session, kb_id: uuid.UUID) -> KbVersion | None:
     return ready[0] if ready else None
 
 
+def _lock_idle(session: Session, kb_id: uuid.UUID) -> None:
+    """Lock the course; refuse while a version is queued or processing (a new one would build
+    on an older version and drop that one's changes)."""
+    session.execute(select(KnowledgeBase.id).where(KnowledgeBase.id == kb_id).with_for_update())
+    busy = session.scalar(
+        select(KbVersion.version).where(
+            KbVersion.kb_id == kb_id,
+            KbVersion.ingest_status.in_([IngestStatus.queued, IngestStatus.processing]),
+        )
+    )
+    if busy:
+        raise StillProcessing(f"version {busy} of this course is still being processed")
+
+
 def create_upload_version(
     session: Session, kb: KnowledgeBase, files: Sequence[StoredFile], origin: str = "upload"
 ) -> KbVersion:
     """A new draft version = the base version's documents + the uploaded files. A file whose
     name and content are already in the base is not processed again; a file with an existing
     name but new content replaces that document. The ingest job does the processing."""
-    # One upload per course at a time: two concurrent requests would both pass the check below.
-    session.execute(select(KnowledgeBase.id).where(KnowledgeBase.id == kb.id).with_for_update())
-    busy = session.scalar(
-        select(KbVersion.version).where(
-            KbVersion.kb_id == kb.id,
-            KbVersion.ingest_status.in_([IngestStatus.queued, IngestStatus.processing]),
-        )
-    )
-    if busy:
-        raise StillProcessing(f"version {busy} of this course is still being processed")
+    _lock_idle(session, kb.id)
     base = base_version(session, kb.id)
     existing: dict[str, str] = {}
     if base:
@@ -116,5 +121,38 @@ def create_upload_version(
         {"file_name": f.file_name, "file_hash": f.file_hash, "path": str(f.path), "source": origin}
         for f in pending
     ]
+    session.flush()
+    return version
+
+
+def create_removal_version(
+    session: Session,
+    kb: KnowledgeBase,
+    remove: set[str],
+    *,
+    from_version: KbVersion | None = None,
+    origin: str = "upload",
+    auto_activate: bool = False,
+) -> KbVersion:
+    """A new version = `from_version` (default: the base version) without the named files.
+    Nothing is re-processed: the job copies the other documents. `auto_activate` publishes it
+    once processed (only the LMS sync uses it: removing material, never adding any)."""
+    _lock_idle(session, kb.id)
+    base = from_version or base_version(session, kb.id)
+    if base is None:
+        raise NothingChanged("the course has no material yet")
+    with kb_scope(base.id) as s:
+        names = set(s.scalars(select(Document.file_name)).all())
+    gone = remove & names
+    if not gone:
+        raise NothingChanged("none of these files is in the course")
+    if not names - gone:
+        raise NothingChanged("a version needs at least one file; upload the new material first")
+    version = create_draft_version(session, kb.id)
+    version.base_version_id = base.id
+    version.ingest_status = IngestStatus.queued
+    version.origin = origin
+    version.removed_files = sorted(gone)
+    version.auto_activate = auto_activate
     session.flush()
     return version

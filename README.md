@@ -197,6 +197,13 @@ itself. Unchanged files are not downloaded again. CMP reads Moodle through a sep
 account that can only look at course contents. Tried with the local Moodle: two visible
 lectures arrived as a draft, a hidden one did not, and a second check found nothing new.
 
+**Removing material (2026-11-18).** A teacher can remove a file from the course (as a new
+draft they publish). A file that is deleted or hidden in Moodle leaves the assistant by
+itself, straight away; files the teacher uploaded directly in CMP are never touched, and if
+Moodle suddenly lists no files at all, nothing is removed (that is more likely an access
+problem). Tried with the local Moodle: a lecture hidden in Moodle was gone from what
+students get after the next check, and the previous version stayed available.
+
 **Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
 Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question

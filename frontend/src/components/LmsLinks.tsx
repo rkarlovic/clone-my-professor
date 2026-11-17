@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { lmsApi, type LmsLink } from "../api";
 
 const STATUS: Record<string, string> = {
+  removed: "datoteke kojih više nema u sustavu za učenje uklonjene su iz asistenta",
   new_version: "pronađene su nove ili promijenjene datoteke: nova verzija čeka vaš pregled",
   unchanged: "nema novih ni promijenjenih datoteka",
   busy: "prethodna verzija se još obrađuje; provjera se ponavlja sljedeći put",
@@ -86,10 +87,12 @@ export function LmsLinks({ kbId, onSynced }: { kbId: string; onSynced: () => voi
                   </span>
                 )}
               </div>
-              {l.last_sync_report?.missing_in_lms && l.last_sync_report.missing_in_lms.length > 0 && (
-                <p className="small muted">
-                  Više nisu u sustavu za učenje (ostaju u asistentu dok ih ne uklonite):{" "}
-                  {l.last_sync_report.missing_in_lms.join(", ")}
+              {l.last_sync_report?.removed_files && l.last_sync_report.removed_files.length > 0 && (
+                <p className="small muted">Uklonjeno: {l.last_sync_report.removed_files.join(", ")}</p>
+              )}
+              {l.last_sync_report?.removal_skipped && (
+                <p className="small error">
+                  Sustav za učenje nije vratio nijednu datoteku, pa ništa nije uklonjeno (provjerite pristup).
                 </p>
               )}
             </>

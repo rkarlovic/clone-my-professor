@@ -30,6 +30,9 @@ export interface Version {
   activated_at: string | null;
   check_status: "queued" | "running" | "done" | "failed" | null;
   origin?: "upload" | "lms";
+  removed_files?: string[];
+  auto_activate?: boolean;
+  is_base?: boolean;
   check: CheckReport | null;
   summary: VersionSummary | null;
   documents: { file_name: string; file_hash: string }[] | null;
@@ -181,6 +184,11 @@ export const teacherApi = {
   },
   step: (kb: string, n: number, step: "approve" | "activate" | "retry") =>
     request<Version>("teacher", `/api/courses/${kb}/versions/${n}/${step}`, { method: "POST" }),
+  remove: (kb: string, file_names: string[]) =>
+    request<Version>("teacher", `/api/courses/${kb}/remove`, {
+      method: "POST",
+      body: json({ file_names }),
+    }),
   discard: (kb: string, n: number) =>
     request<void>("teacher", `/api/courses/${kb}/versions/${n}`, { method: "DELETE" }),
   questions: (kb: string, status: string) =>
@@ -240,7 +248,7 @@ export interface LmsLink {
   sync_enabled: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
-  last_sync_report: { missing_in_lms?: string[]; new_files?: string[] } | null;
+  last_sync_report: { removed_files?: string[]; new_files?: string[]; removal_skipped?: string } | null;
 }
 
 export const lmsApi = {
