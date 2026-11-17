@@ -155,8 +155,16 @@ answer (optionally pointing to the file and slide) or dismiss a question that ne
 answer. The student finds the teacher's answer under their question in the chat history.
 Answers that point to a slide later become test questions for the course, at no extra work.
 
-**Next:** in step 3, the automatic test questions after each upload, the web pages for chat and teachers, and the
-teacher's settings. Fixes for the weak spots above (on both courses, answers
+**Step 3, fifth piece (2026-11-17): the web pages.** CMP can now be used in a browser, in
+Croatian, on a computer or a phone. Teachers create a course, upload files, review a
+draft, approve and publish it, and answer the questions in their queue. Students open the
+course's chat link: the notice that they are talking to an AI is always at the top, they
+see what the assistant is doing while it works, then the answer with clickable sources,
+and later the teacher's own answers to their forwarded questions. The whole loop was tried
+in a browser on the second course. Sign-in is still a development stand-in (just a name).
+
+**Next:** in step 3, the automatic test questions after each upload and the teacher's
+settings; then real sign-in and the Moodle connector (step 4). Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -184,6 +192,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Question queue (step 3) | Teacher API: forwarded questions with the reason, answer with optional sources (checked against the course's files) or dismiss; no student identity shown; the student sees the teacher's answer in their history |
+| Web pages (step 3) | React + Vite: teacher pages (courses, upload, review, approve, publish, question queue) and the student chat (AI notice, progress, answer with sources, teacher answers); runs in a dev container on port 5173 |
 | Student chat (step 3) | Chat API: answers from the live version only, server-sent progress then the checked answer with citations, AI notice first, forwarded questions to the teacher queue, own history, 👍/👎 |
 | Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |

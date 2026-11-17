@@ -1,0 +1,162 @@
+import { useState } from "react";
+import { teacherApi, type Version } from "../api";
+
+export const STATUS: Record<Version["status"], string> = {
+  draft: "nacrt",
+  approved: "odobreno",
+  active: "objavljeno studentima",
+};
+export const INGEST: Record<Version["ingest_status"], string> = {
+  queued: "čeka obradu",
+  processing: "obrađuje se…",
+  ready: "obrađeno",
+  failed: "greška pri obradi",
+};
+
+function when(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString("hr-HR") : "";
+}
+
+export function VersionRow({
+  kbId,
+  version: v,
+  onChanged,
+}: {
+  kbId: string;
+  version: Version;
+  onChanged: () => void;
+}) {
+  const [detail, setDetail] = useState<Version | null>(null);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState(false);
+
+  async function run(action: () => Promise<unknown>, confirmText?: string) {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setWorking(true);
+    setError("");
+    try {
+      await action();
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function toggleDetail() {
+    if (detail) return setDetail(null);
+    try {
+      setDetail(await teacherApi.version(kbId, v.version));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  const ready = v.ingest_status === "ready";
+  return (
+    <li className={`version ${v.status}`}>
+      <div className="row">
+        <strong>Verzija {v.version}</strong>
+        <span className={`badge ${v.status === "active" ? "ok" : ""}`}>{STATUS[v.status]}</span>
+        <span className={`badge ${v.ingest_status === "failed" ? "bad" : ""}`}>
+          {INGEST[v.ingest_status]}
+        </span>
+        <span className="muted small">{when(v.created_at)}</span>
+      </div>
+      {v.pending_files.length > 0 && (
+        <p className="small">Novo u ovoj verziji: {v.pending_files.join(", ")}</p>
+      )}
+      {v.ingest_error && <p className="error">{v.ingest_error}</p>}
+      {v.summary && (
+        <p className="small muted">
+          {v.summary.documents} obrađeno, {v.summary.carried_over.length} preneseno iz prethodne
+          verzije · {v.summary.pages} stranica/slajdova · {v.summary.chunks_embedded} odlomaka ·{" "}
+          {Math.round(v.summary.seconds)} s
+        </p>
+      )}
+      <div className="row actions">
+        {ready && (
+          <button type="button" className="link" onClick={toggleDetail}>
+            {detail ? "Sakrij pregled" : "Pregledaj"}
+          </button>
+        )}
+        {ready && v.status === "draft" && (
+          <>
+            <button
+              type="button"
+              disabled={working}
+              onClick={() => run(() => teacherApi.step(kbId, v.version, "approve"))}
+            >
+              Odobri
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              disabled={working}
+              onClick={() =>
+                run(
+                  () => teacherApi.discard(kbId, v.version),
+                  `Odbaciti verziju ${v.version}? Ovo se ne može poništiti.`,
+                )
+              }
+            >
+              Odbaci
+            </button>
+          </>
+        )}
+        {v.status === "approved" && (
+          <button
+            type="button"
+            disabled={working}
+            onClick={() =>
+              run(
+                () => teacherApi.step(kbId, v.version, "activate"),
+                `Objaviti verziju ${v.version}? Studenti će od sada dobivati odgovore iz nje.`,
+              )
+            }
+          >
+            Objavi studentima
+          </button>
+        )}
+        {v.ingest_status === "failed" && (
+          <button
+            type="button"
+            disabled={working}
+            onClick={() => run(() => teacherApi.step(kbId, v.version, "retry"))}
+          >
+            Pokušaj ponovno
+          </button>
+        )}
+      </div>
+      {error && <p className="error">{error}</p>}
+      {detail && (
+        <div className="detail">
+          <h3>Datoteke</h3>
+          <ul className="small">
+            {(detail.documents ?? []).map((d) => (
+              <li key={d.file_name}>
+                {d.file_name}
+                {detail.summary?.carried_over.includes(d.file_name) && (
+                  <span className="muted"> (preneseno)</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {detail.summary && Object.keys(detail.summary.sections).length > 0 && (
+            <>
+              <h3>Cjeline (novo obrađene)</h3>
+              <ul className="small">
+                {Object.entries(detail.summary.sections).map(([label, n]) => (
+                  <li key={label}>
+                    {label.split(" › ").slice(1).join(" › ") || label}: {n} odlomaka
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}

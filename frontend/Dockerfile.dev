@@ -1,0 +1,7 @@
+# Dev only: npm, Vite and Vitest in a container (no Node on the host). The production image
+# (static build behind Caddy/nginx) comes with the prod compose file.
+FROM node:24.11.1-bookworm-slim
+WORKDIR /app
+# node_modules lives in a named volume; created here so the volume is owned by the node user.
+RUN mkdir -p /app/node_modules && chown -R node:node /app
+USER node

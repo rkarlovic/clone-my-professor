@@ -110,7 +110,7 @@ Everything runs in **Docker containers** (OCI images, so Podman/Kubernetes also 
 - Reranker: **bge-reranker-v2-m3**
 - Model gateway: **LiteLLM**; serving: **vLLM** (pilot), **Ollama** (dev)
 - Observability: **Langfuse** (self-hosted). Evaluation: **Ragas** / **promptfoo**.
-- Tooling: **uv** (Python packages), **ruff** (lint + format), **pytest**, **npm** + **Vitest** (frontend), **Docker** + **Docker Compose** (all services, dev and prod)
+- Tooling: **uv** (Python packages), **ruff** (lint + format), **pytest**, **npm** + **Vitest** (frontend; Node runs in Docker in dev), **Docker** + **Docker Compose** (all services, dev and prod)
 - FAISS/Chroma: only for throwaway experiments, never in the product.
 
 ## Repository layout
@@ -893,6 +893,52 @@ Decisions made in step 1:
 - Not yet: notifications (teacher: new questions; student: answered), grouping similar
   questions, turning answered questions into the collected eval set, the dashboard page.
 
+**Step 3, part 5: web pages (2026-11-17).**
+- `frontend/`: React 19.3 + Vite 8.3 + TypeScript 7.0 (type-check only; Vite builds), Vitest 5.1
+  + Testing Library + jsdom; exact versions, each at least two weeks old when added. Croatian
+  UI, light and dark, readable at phone width (checked at 375 px: no horizontal scroll). No
+  router or UI library: hash routes (`#/teacher`, `#/teacher/<id>`, `#/chat/<id>`) work from a
+  static server and inside LMS iframes.
+- **Node runs only in Docker** (decided 2026-11-17; nothing installed on the host): the
+  `frontend` service in `infra/docker-compose.dev.yml` (profile `frontend`, image built from
+  `frontend/Dockerfile.dev` = `node:24.11.1-bookworm-slim`, user `node`, `node_modules` in a
+  named volume, polling file watcher for Windows mounts) runs `npm ci && npm run dev` on
+  127.0.0.1:5173 and proxies `/api` to the backend on the host (`CMP_API_URL`,
+  host.docker.internal). Docker Desktop forwards that to the host's loopback, so the API stays
+  bound to 127.0.0.1 (checked); on Linux Docker Engine the API would have to listen on the
+  bridge address instead.
+- Pages: start page with the **dev sign-in** (a name stored in localStorage, sent as the
+  X-CMP-Dev-* header; says plainly that it is not real sign-in); teacher course list + new
+  course; course page with upload (pick or drag files), versions (status in words, summary,
+  review of files and sections, approve / publish with confirmation / discard / retry; polls
+  every 3 s while a version is processing; upload disabled meanwhile), the student link once
+  published, and the question queue (filter, answer with optional file + slide from the active
+  version, edit, dismiss; no student identity). Student chat: the AI notice pinned at the top
+  (rule 6, also before sign-in and when the course is not published), history, progress text
+  per stage, the answer with [n] markers as buttons that scroll to the numbered source list,
+  👍/👎, the teacher's answer in its own bubble labelled "Odgovor nastavnika".
+- The chat reads the server-sent events from a `fetch` POST (`src/sse.ts`; `EventSource` cannot
+  POST). An error boundary replaces a crashed page with a message and a reload button.
+- Tests (13): SSE parsing (split chunks, CRLF, keep-alive), citation markers (unknown numbers
+  dropped), routes, version buttons per state, the chat (notice always shown, the dev header,
+  the answer with its source, the teacher's answer labelled, an unpublished course).
+  `src/test-setup.ts` makes `scrollIntoView` return a Promise like current browsers: the first
+  browser run crashed the chat on exactly that (an effect returned its result), which jsdom
+  had hidden; the setup now fails those tests on the old code.
+- **Checked in the browser** (API + worker + frontend container, dev models): teacher signs
+  in, creates a course; an upload (sent through the API: the browser tools cannot pick files)
+  shows as processing and the page refreshes itself until ready; review shows 28 slides / 18
+  chunks / 14 s; approve; publish (green box with the student link). Student: the AI notice,
+  "Zašto identifikacija … kontinuirani proces?" → stage text → the answer citing
+  "7 Identifikacija.pptx, str. 16" after ~80 s; "Tko je Lav Vigotski?" → forwarded, "Nastavnik
+  još nije odgovorio". Teacher answers it in the queue with source slide 4; the student's chat
+  then shows "Odgovor nastavnika".
+- `npm audit`: 6 high, all one advisory (picomatch ReDoS, every version) in Vite/Vitest's file
+  matching; dev tooling only, nothing reaches users; the offered fix downgrades Vitest, not
+  applied. Re-check when Vite/Vitest update.
+- Not yet: the production image (static build behind Caddy) and HTTPS proxy, real sign-in,
+  LTI launch into the chat, notifications, the teacher's settings page.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -979,11 +1025,19 @@ uv run python -m scripts.worker          # background worker: processes uploads 
 #        -H "Content-Type: application/json; charset=utf-8" -d '{"question": "..."}'
 ```
 
+Web pages (Node only in Docker; run from the repo root, with the API and worker above running):
+```bash
+docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend up -d frontend
+#   -> http://127.0.0.1:5173 (live reload; /api proxied to the API on the host)
+docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend run --rm frontend npm test
+docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend run --rm frontend npm run build
+#   npm run typecheck; npm install --save-exact <pkg>@<version> to add a package
+```
+
 Planned (later build steps):
 ```bash
-docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, frontend, langfuse, moodle
+docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, langfuse, moodle
 docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
-cd frontend && npm install && npm run dev                          # npm test / npm run build
 ```
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects

@@ -1,6 +1,8 @@
 # Dev stack for build step 1 (retrieval spike): Postgres + pgvector, Ollama, optional reranker.
 # The backend runs on the host with uv (see CLAUDE.md "Commands").
-# api / worker / frontend / langfuse / moodle are added in later build steps.
+# api / worker / langfuse / moodle are added in later build steps.
+#   # the web pages (Vite dev server on http://127.0.0.1:5173; backend API on the host):
+#   docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend up -d frontend
 #
 #   docker compose -f infra/docker-compose.dev.yml --env-file .env up -d
 #   # with an NVIDIA GPU for Ollama:
@@ -60,7 +62,27 @@ services:
       - hf_cache:/app/.cache
     restart: unless-stopped
 
+  # Web pages (React + Vite). Dev only: source mounted with live reload; /api is proxied to the
+  # backend running on the host (uvicorn on 127.0.0.1:8000, reached as host.docker.internal).
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    command: ["sh", "-c", "npm ci && npm run dev"]
+    environment:
+      CMP_API_URL: http://host.docker.internal:8000
+      CMP_POLL: "1"  # Windows bind mounts do not deliver file events
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-5173}:5173"
+    volumes:
+      - ../frontend:/app
+      - frontend_node_modules:/app/node_modules
+
 volumes:
   pgdata:
+  frontend_node_modules:
   ollama_models:
   hf_cache:
