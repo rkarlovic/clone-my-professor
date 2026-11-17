@@ -153,3 +153,26 @@ class TeacherQuestion(Base):
     answer: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ChatMessage(Base):
+    """One student question and the clone's reply. Holds student text: personal data (rule 9)."""
+
+    __tablename__ = "chat_message"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    kb_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("kb_version.id"))
+    student_ref: Mapped[str] = mapped_column(String(200))  # opaque id, never a name
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)  # what the student saw
+    forwarded: Mapped[ForwardReason | None] = mapped_column(
+        Enum(ForwardReason, name="forward_reason")
+    )
+    teacher_question_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher_question.id"))
+    # [{"n", "file_name", "pages"}]: the sources the answer cites, by their [n] markers
+    citations: Mapped[list[dict]] = mapped_column(JSONB, default=list)
+    trace: Mapped[dict] = mapped_column(JSONB, default=dict)  # versions and model ids
+    seconds: Mapped[dict] = mapped_column(JSONB, default=dict)
+    feedback: Mapped[int | None] = mapped_column(Integer)  # 1 helpful, -1 not helpful
+    feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

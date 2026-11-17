@@ -834,6 +834,43 @@ Decisions made in step 1:
   applies to `scripts.ingest`), context sentences for uploads (off), containers for
   `api`/`worker`, the frontend.
 
+**Step 3, part 3: student chat (2026-11-17).**
+- `core/chat.py` `ask`: answers only from the course's **active** version (fixed when the
+  question arrives, so an activation during a slow answer cannot mix versions), with the
+  unchanged step-2 pipeline (`answer_question`, dense k=5, live check on); stores every
+  exchange in `chat_message` (migration `0009`: question, what the student saw, forward
+  reason, citations, trace, seconds, 👍/👎) and, when forwarded, queues the question for the
+  teacher (`teacher_question`) in the same transaction. Single questions, no conversation
+  memory yet: the pipeline and its checks were built and measured on single questions.
+- API (`app/chat.py`): `GET /api/chat/{kb_id}` (course name, `live`, the AI notice),
+  `POST /api/chat/{kb_id}/messages` (server-sent events), `GET /api/chat/{kb_id}/messages`
+  (own history only), `POST /api/chat/messages/{id}/feedback` (own messages only). 409 while
+  the course has no active version.
+- **The stream does not send answer tokens**: it sends `notice` (rule 6, first event),
+  `stage` events (scope, search, answer, check, via a new `on_stage` callback in
+  `answer_question`), then one `answer` event once every check has passed (rule 1: the check
+  runs before the student sees anything), or `error`. Keep-alive comments every 15 s. The
+  answer runs in its own thread to the end even if the student closes the page, so a
+  forwarded question still reaches the teacher. Model errors reach the student as a generic
+  "try again later" (details only in the log); nothing is queued for them.
+- Student identity is a dev stub like the teacher's: `X-CMP-Dev-Student` → opaque
+  `student_ref` "dev:<value>" (rule 9: never a name); LTI will supply the platform's opaque
+  user id. In dev any student can ask in any live course; LTI launch maps course access.
+- Tests (`tests/test_chat.py`, 4, fake answer function): no answers before publishing, the
+  event order (notice first, stages, then the answer from the active version), own history and
+  feedback only, a forwarded question in the teacher queue with an opaque student ref, a model
+  failure without details.
+- **End-to-end with the real dev models** (API + worker on this laptop, two lectures of
+  `Rad_s_darovitom_djecom` uploaded, approved, activated): before activation 409; "Koliko
+  bodova treba za prolaz?" forwarded `admin` at once (0 s); "Zašto identifikacija darovite
+  djece mora biti kontinuirani proces?" answered in **82 s** (scope 9 s, answer ~40 s, check
+  ~33 s), citing "7 Identifikacija.pptx" slide 16, correct; "Tko je Lav Vigotski?" forwarded
+  `low_score` after 12 s. Both forwarded questions were in the teacher queue, all three
+  exchanges stored. (curl from Git Bash sent "š" in the wrong encoding and got a 422; a client
+  sending UTF-8 works, as browsers do.)
+- Not yet: the chat page (frontend), the teacher's view of the queue, LTI, retention
+  rules for `chat_message`, conversation memory, rate limits per student.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -915,6 +952,9 @@ uv run python -m scripts.worker          # background worker: processes uploads 
 #   curl -X POST 127.0.0.1:8000/api/courses -H "X-CMP-Dev-Teacher: ana" \
 #        -H "Content-Type: application/json" -d '{"subject_name": "Predmet"}'
 #   curl -X POST 127.0.0.1:8000/api/courses/<id>/versions -H "X-CMP-Dev-Teacher: ana" -F files=@slides.pptx
+#   then .../versions/1/approve and .../versions/1/activate; a student asks (server-sent events):
+#   curl -N -X POST 127.0.0.1:8000/api/chat/<id>/messages -H "X-CMP-Dev-Student: s1" \
+#        -H "Content-Type: application/json; charset=utf-8" -d '{"question": "..."}'
 ```
 
 Planned (later build steps):

@@ -32,3 +32,22 @@ def current_teacher(
 
 
 TeacherDep = Annotated[Teacher, Depends(current_teacher)]
+
+
+STUDENT_DEV_HEADER = "X-CMP-Dev-Student"
+
+
+def current_student(
+    x_cmp_dev_student: Annotated[str | None, Header()] = None,
+) -> str:
+    """An opaque student reference (rule 9: never a name). In dev mode it comes from the
+    X-CMP-Dev-Student header; with LTI it will be the platform's opaque user id."""
+    if get_settings().auth_mode != "dev":
+        raise HTTPException(401, "sign-in is not configured")
+    ref = (x_cmp_dev_student or "").strip()
+    if not ref:
+        raise HTTPException(401, f"dev mode: send the {STUDENT_DEV_HEADER} header")
+    return f"dev:{ref[:190]}"
+
+
+StudentDep = Annotated[str, Depends(current_student)]

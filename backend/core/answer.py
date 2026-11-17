@@ -13,6 +13,7 @@ evaluation runs do not fill the teacher's queue.
 import re
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -132,7 +133,11 @@ def answer_question(
     persona_text: str | None = None,
     persona_version: int | None = None,
     check: bool = True,
+    on_stage: Callable[[str], None] | None = None,
 ) -> Answer:
+    """on_stage: called with "scope", "search", "answer", "check" as each step starts, so a
+    chat client can show progress (the answer itself is shown only after every check)."""
+    stage = on_stage or (lambda _: None)
     cfg = get_model_config()
     subject, topics = _subject(kb_version_id)
     result = Answer(question=question, text="", forwarded=None)
@@ -150,6 +155,7 @@ def answer_question(
         "retrieval": {"k": k, "rerank_candidates": rerank_candidates},
     }
 
+    stage("scope")
     started = time.time()
     result.scope, reason = scope_check(subject, topics, question)
     result.seconds["scope"] = round(time.time() - started, 1)
@@ -159,6 +165,7 @@ def answer_question(
     def forward(later: ForwardReason) -> Answer:
         return _forward(result, reason or later)  # a DRUGO label names the reason
 
+    stage("search")
     started = time.time()
     hits = search(kb_version_id, question, k, rerank_candidates=rerank_candidates)
     result.seconds["retrieval"] = round(time.time() - started, 1)
@@ -174,6 +181,7 @@ def answer_question(
         sources="\n\n".join(f"[{s.n}] ({s.citation})\n{s.text}" for s in result.sources),
         question=question,
     )
+    stage("answer")
     started = time.time()
     result.raw = complete(
         "answer", [{"role": "system", "content": system}, {"role": "user", "content": user}]
@@ -187,6 +195,7 @@ def answer_question(
     if not check:
         return result
 
+    stage("check")
     started = time.time()
     result.check = answer_check(question, text, cited)
     result.seconds["check"] = round(time.time() - started, 1)

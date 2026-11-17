@@ -138,8 +138,20 @@ it from now on). Exactly one version is live at a time; activating a new one ret
 old one, which can be made live again if something is wrong. A draft the teacher does not
 want can be thrown away; approved versions are kept as history.
 
-**Next:** in step 3, the automatic test questions after each upload, the teacher's question queue, the student chat window
-and the teacher's settings. Fixes for the weak spots above (on both courses, answers
+**Step 3, third piece (2026-11-17): student chat.** A student can ask a question in a
+published course and gets the answer from the live version only, with its sources, and the
+first thing every chat says is that they are talking to an AI. While the clone works, the
+student sees what it is doing (checking the question, searching, writing, checking the
+answer); the answer itself appears only after the automatic check has passed. Questions it
+cannot answer go to the teacher's queue. Students can mark an answer helpful or not, and
+see only their own questions. Tried on the second course with the real models: a question
+about points went straight to the teacher, a question the slides answer got a correct
+answer citing slide 16 after 82 seconds on this laptop, and a question about Vygotsky (not
+in the material) went to the teacher. There is no chat page yet.
+
+**Next:** in step 3, the teacher's question queue (answering forwarded questions), the
+automatic test questions after each upload, the web pages for chat and teachers, and the
+teacher's settings. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -166,6 +178,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
+| Student chat (step 3) | Chat API: answers from the live version only, server-sent progress then the checked answer with citations, AI notice first, forwarded questions to the teacher queue, own history, 👍/👎 |
 | Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.chat import router as chat_router
 from app.courses import router as courses_router
 from jobs import close_queue, open_queue
 
@@ -18,6 +19,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Clone My Professor", lifespan=lifespan)
 app.include_router(courses_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")
