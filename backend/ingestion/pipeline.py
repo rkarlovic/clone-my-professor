@@ -68,7 +68,7 @@ class IngestReport:
 
 
 def embedded_text(heading_path: str | None, context: str | None, text: str) -> str:
-    """What gets embedded (dense and sparse): heading path + optional context + text (recipe
+    """What gets embedded: heading path + optional context + text (recipe
     step 4). Stored chunks keep these parts separately, so the text can be rebuilt later."""
     return "\n".join(x for x in (heading_path, context, "", text) if x is not None)
 

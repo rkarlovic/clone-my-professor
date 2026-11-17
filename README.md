@@ -69,7 +69,8 @@ answer, and the automatic set of 60 + 12.
 - **The tricks that helped on the Java course do not help here.** The extra sentence describing
   each slide made search worse (89 % → 84 %): on a course about one topic, every slide got almost
   the same sentence. The keyword search and the slower re-ranking did not improve results either.
-  So the simplest setup is the best one here, and those tricks stay switched off by default.
+  So the simplest setup is the best one here. The sentence stays an option, switched off by
+  default; the keyword search was an experiment and has been removed.
 - Many of the teacher's questions seemed to be answered only in the course handbook, which is
   not part of the material. Their search scores look just like those of answerable questions, so
   only the answer step can send them to the teacher.
@@ -147,14 +148,14 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Database | Alembic migration for knowledge bases, versions, documents and chunks; row-level security per `kb_version` with a non-owner app role |
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
-| Retrieval | Dense vector search filtered by `kb_version`, optional reranking, optional hybrid with BGE-M3 sparse vectors (experiment) |
+| Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |
 
 Retrieval: recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense
 search, **0.89** with a context sentence per chunk (`--context`, the current default version), and
-**0.95** with hybrid candidates plus reranking. Answers (dense, dev models on CPU): easy 25/25,
+**0.95** with hybrid candidates plus reranking (an experiment, removed after the second course did not confirm it). Answers (dense, dev models on CPU): easy 25/25,
 hard 16–17/19, teacher's exam questions 59/60 cited the expected slides; 6/6 out-of-scope and admin
 questions forwarded. Full comparisons and timings in CLAUDE.md.
 
@@ -166,7 +167,7 @@ LMS connectors, background jobs, Langfuse tracing.
 ```
 LMS (Moodle/Merlin, Teams, Classroom, …) ─► connector ─► CMP core
                                                           ├─ ingestion: Docling → chunking → embeddings → pgvector
-                                                          ├─ retrieval: dense (+ sparse) → rerank → parent sections
+                                                          ├─ retrieval: dense → rerank → parent sections
                                                           ├─ prompt assembly: platform rules > teacher persona > student adaptation
                                                           ├─ model layer: LiteLLM → vLLM (pilot) / Ollama (dev)
                                                           ├─ teacher question queue + analytics
@@ -242,10 +243,9 @@ uv run python -m scripts.smoke # end-to-end check: embed → pgvector under RLS 
    ```bash
    uv run python -m scripts.evaluate --subject <subject>
    ```
-   `ask` and `evaluate` also take `--version N`, `--rerank 20` and `--hybrid`; `evaluate` takes
+   `ask` and `evaluate` also take `--version N`, and `--rerank 20`; `evaluate` takes
    `--set PATH` for another question set of the same subject. Sets made from someone else's text
-   (e.g. a teacher's own exam questions) go in `eval/sets/local/`, which is git-ignored. Hybrid needs
-   sparse vectors first: `uv run python -m scripts.sparse --subject <subject>` (experiment).
+   (e.g. a teacher's own exam questions) go in `eval/sets/local/`, which is git-ignored.
    Ingest reports record time per step; eval reports record their runtime.
 5. Get the clone's answer (needs `ollama pull qwen3.5:9b` and `qwen3.5:4b`), and evaluate answers
    on the golden set (~2 min per question with the answer check and the judge on a CPU laptop;
@@ -265,7 +265,6 @@ Switching a model means editing that file and re-running the golden set — no c
 |---|---|---|
 | `embedding` | BGE-M3 | vectors for search |
 | `reranker` | bge-reranker-v2-m3 (Infinity) | reorders search candidates |
-| `sparse` | BGE-M3 (transformers, experiment) | keyword-style vectors for hybrid search |
 | `answer` | Qwen 3.5 9B | student answers (step 2) |
 | `fast` | Qwen 3.5 4B | query rewriting, out-of-scope check |
 | `check` | Qwen 3.5 9B | checks each answer against its sources before the student sees it |
@@ -288,7 +287,7 @@ backend/
   connectors/   LMS-specific code (empty for now)
   jobs/         Procrastinate (empty for now)
   migrations/   Alembic
-  scripts/      smoke, parse, ingest, sparse, ask, evaluate, evaluate_answers
+  scripts/      smoke, parse, ingest, ask, evaluate, evaluate_answers
   tests/
 config/         models.yaml
 eval/           golden sets (sets/) and run reports (reports/, git-ignored)

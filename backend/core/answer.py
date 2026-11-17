@@ -129,7 +129,6 @@ def answer_question(
     *,
     k: int = 5,
     rerank_candidates: int | None = None,
-    hybrid: bool = False,
     persona_text: str | None = None,
     persona_version: int | None = None,
     check: bool = True,
@@ -148,7 +147,7 @@ def answer_question(
         ),
         "scope_prompt_version": prompt_version(["scope_check"], "fast"),
         "check_prompt_version": prompt_version(["answer_check"], "check") if check else None,
-        "retrieval": {"k": k, "rerank_candidates": rerank_candidates, "hybrid": hybrid},
+        "retrieval": {"k": k, "rerank_candidates": rerank_candidates},
     }
 
     started = time.time()
@@ -161,9 +160,9 @@ def answer_question(
         return _forward(result, reason or later)  # a DRUGO label names the reason
 
     started = time.time()
-    hits = search(kb_version_id, question, k, rerank_candidates=rerank_candidates, hybrid=hybrid)
+    hits = search(kb_version_id, question, k, rerank_candidates=rerank_candidates)
     result.seconds["retrieval"] = round(time.time() - started, 1)
-    floor = _score_floor(rerank_candidates, hybrid)
+    floor = _score_floor(rerank_candidates)
     if not hits or (floor is not None and hits[0].score < floor):
         return forward(ForwardReason.low_score)
     result.sources = build_sources(hits)
@@ -330,13 +329,10 @@ def _forward(result: Answer, reason: ForwardReason) -> Answer:
     return result
 
 
-def _score_floor(rerank_candidates: int | None, hybrid: bool) -> float | None:
-    """The floor on the scale of the score the hits carry. Fused (hybrid, not reranked) scores
-    are rank-based and have no meaningful floor."""
+def _score_floor(rerank_candidates: int | None) -> float | None:
+    """The floor on the scale of the score the hits carry."""
     cfg = get_model_config()
-    if rerank_candidates:
-        return cfg.role("reranker").min_score
-    return None if hybrid else cfg.role("embedding").min_score
+    return cfg.role("reranker" if rerank_candidates else "embedding").min_score
 
 
 @lru_cache(maxsize=64)

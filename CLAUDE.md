@@ -23,7 +23,7 @@ One shared pipeline; per-teacher-and-subject data and configuration.
 ```
 LMS (Moodle/Merlin, Teams, Classroom, …) ─► connector ─► CMP core
                                                           ├─ ingestion: Docling → chunking → embeddings → pgvector
-                                                          ├─ retrieval: dense (+ sparse) → rerank → parent sections
+                                                          ├─ retrieval: dense → rerank → parent sections
                                                           ├─ prompt assembly: platform rules > teacher persona > student adaptation
                                                           ├─ model layer: LiteLLM → open models (vLLM / Ollama); commercial optional via config
                                                           ├─ teacher question queue + analytics
@@ -105,7 +105,8 @@ Everything runs in **Docker containers** (OCI images, so Podman/Kubernetes also 
 - Background jobs: **Procrastinate** (Postgres-based queue) — ingestion, LMS polling (every 15–30 min), golden-set runs, version activation
 - DB: **PostgreSQL + pgvector**, row-level security per knowledge base. Qdrant only if hybrid retrieval quality later demands it.
 - Parsing: **Docling** (OCR for scans; `vision` role for image/diagram captions)
-- Embeddings: **BGE-M3** (dense; sparse vectors as the hybrid/keyword option). Same embedding model for all subjects.
+- Embeddings: **BGE-M3** (dense). Same embedding model for all subjects. (Its sparse vectors
+  were tried for hybrid search and dropped on 2026-11-17, see "Decisions made in step 1".)
 - Reranker: **bge-reranker-v2-m3**
 - Model gateway: **LiteLLM**; serving: **vLLM** (pilot), **Ollama** (dev)
 - Observability: **Langfuse** (self-hosted). Evaluation: **Ragas** / **promptfoo**.
@@ -149,7 +150,7 @@ knowledge_base     (id, teacher_id, subject_name, status)          -- one per te
 kb_version         (id, kb_id, version, status)                    -- draft | approved | active; activate atomically
 document           (id, kb_version_id, source_platform, external_id, file_name, file_hash, modified_at, approved_at)
 chunk              (id, kb_version_id, document_id, parent_id, text, context, heading_path,
-                    content_type, page_or_slide, embedding vector(1024), sparse_embedding)
+                    content_type, page_or_slide, embedding vector(1024), also_on_pages)
 persona_config     (id, kb_id, version, settings jsonb, free_text, approved_at)
 platform_context_map (platform, external_course_id, kb_id)         -- many LMS courses → one KB
 teacher_question   (id, kb_id, student_ref, question, reason, status, answer)
@@ -190,8 +191,7 @@ Done:
   superuser. Migration `0002` adds `chunk.also_on_pages`. Tests (RLS isolation, model config,
   chunking, citations) pass.
 - Model layer: roles resolved from `config/models.yaml` (dev profile, Ollama). Only `embedding`
-  (BGE-M3), `reranker`, `context` (qwen3.5 via Ollama) and the experimental `sparse` role have
-  been used; the chat models are placeholders that fit an 11 GB GPU and have not been pulled.
+  (BGE-M3), `reranker`, `context` (qwen3.5 via Ollama) have been used; the chat models are placeholders that fit an 11 GB GPU and have not been pulled.
 - Ingestion: Docling → slide-level chunks → BGE-M3 → pgvector, every run a new draft version with
   a report in `eval/reports/<subject>/`. Retrieval: dense search filtered by `kb_version_id`,
   optional rerank.
@@ -342,10 +342,13 @@ Decisions made in step 1:
 - The `context` role runs with `reasoning_effort: none` (OpenAI-schema parameter through
   LiteLLM): a thinking model otherwise spends minutes per chunk on reasoning nobody reads.
 - The reranker reads heading path + context sentence + text, the same text that was embedded.
-- **BGE-M3 sparse is an experiment and a narrow, documented exception to rule 8**: LiteLLM has no
-  sparse-embedding API, so `llm/sparse.py` loads the model with `transformers` (the model id lives
-  only in `models.yaml`, role `sparse`, kind `sparse`; needs `uv sync --group ingest`). It is
-  opt-in (`--hybrid`), off by default, and gets removed if a second subject doesn't confirm it.
+- **BGE-M3 sparse (hybrid search) was an experiment and is removed (2026-11-17).** It was the
+  one model call outside LiteLLM (no sparse-embedding API; `llm/sparse.py` loaded the model
+  with `transformers`), kept only until a second subject confirmed it. It did not: on
+  `Rad_s_darovitom_djecom` hybrid lost to dense in every mode. Code, the `sparse` role, the
+  `--hybrid` flags and `scripts.sparse` are gone; migration `0005` drops
+  `chunk.sparse_embedding`. The hybrid numbers in this file are history. A keyword option
+  comes back only through a server LiteLLM can call, and only if a benchmark shows a gain.
 - A vLLM pilot profile will be a separate models file selected with `CMP_MODELS_CONFIG`; the
   current `config/models.yaml` is dev-only.
 - Windows dev: use `127.0.0.1`, not `localhost` (IPv6 stall); scripts reconfigure stdout to UTF-8.
@@ -711,8 +714,8 @@ Decisions made in step 1:
     context sentence ends generically ("Tekst se direktno uklapa u temu predavanja o radu s
     darovitim djecom…"), and on a one-topic course that makes every chunk alike. Hybrid in rank
     fusion hurts (as on Java); as a rerank pool it does not help; rerank alone does not help.
-    Best here: **v1 dense**, the default. `--context` and `--hybrid` stay opt-in; the sparse
-    experiment was to be removed if a second subject did not confirm it (decision pending).
+    Best here: **v1 dense**, the default. `--context` stays opt-in; the sparse experiment
+    is removed (see "Decisions made in step 1").
   - Teacher-set misses are mostly multi-part or broad questions and neighbouring slides
     (t25, t26, t39, t49, t55, t61, x01, x05, x10 on v1 dense). Check-set misses on v1 dense:
     10, none with a neighbour in the top 5; 7 of them are broad questions about the two Okvir
@@ -769,8 +772,7 @@ Next:
    above): `--context` and hybrid not confirmed; 40-question answer sample done (answerable
    18/18, must-forward 12/16). `not_in_materials` labels re-checked (5 of 28 were answerable).
    Left: the teacher confirms the remaining 23 and the borderline t06/t54; answers stretched from a list or a nearby page (x03, x13, i01, i05) need a
-   stricter check, likely a stronger `check` model on vLLM; decide whether to drop the sparse
-   experiment.
+   stricter check, likely a stronger `check` model on vLLM; sparse experiment removed.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
@@ -820,21 +822,20 @@ uv run python -m scripts.ingest --subject <folder>          # new draft kb_versi
 #   options: --context (`context` role per chunk) --ocr (scans) --min-tokens N --max-tokens N
 #            --duplicate-similarity F (default 0.85) | --keep-duplicates (no folding)
 #   --context takes ~11 s per chunk on a CPU laptop (2 h 23 min for 758 chunks)
-uv run python -m scripts.sparse --subject <folder>         # experiment: BGE-M3 sparse vectors for a version
-uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20, --hybrid
+uv run python -m scripts.ask --subject <folder> "pitanje"  # top-5 hits; --version N, --rerank 20
 #   --answer: the clone's answer with citations (or forward; queued unless --no-queue)
 #   needs the chat models: ... exec ollama ollama pull qwen3.5:9b  (and qwen3.5:4b)
 uv run python -m scripts.evaluate_answers --subject <folder> --version 3   # answers on the golden set
-#   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank, --hybrid,
+#   --judge (grounding/on-topic), --ids e01,h20, --difficulty, --limit, --set, --rerank,
 #   --no-check (skip the live answer check)
 #   ~130 s per question on CPU (dense, with the check and --judge; 109 min for 50),
-#   ~40 s more with --hybrid --rerank 20
+#   ~20 s more with --rerank 20
 uv run python -m scripts.checkset --subject <folder> --version 3 -n 60   # auto-generated check set
 #   -> eval/sets/local/<folder>.check.yaml (git-ignored); --seed, --force (replace an edited set)
 #   ~18 s per question on CPU; run it with --set like any other set
 uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on eval/sets/<folder>.yaml
 #   per difficulty (easy/hard); abstain questions report their top score;
-#   --version N, -k, --rerank 20, --hybrid (needs scripts.sparse first),
+#   --version N, -k, --rerank 20,
 #   --set PATH (another set for the subject, e.g. eval/sets/local/<subject>.teacher.yaml)
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format

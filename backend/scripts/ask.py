@@ -1,6 +1,6 @@
 """Show what retrieval finds for a question, or (--answer) the clone's answer.
 
-uv run python -m scripts.ask --subject <folder> [--version N] [-k 5] [--rerank 20] [--hybrid]
+uv run python -m scripts.ask --subject <folder> [--version N] [-k 5] [--rerank 20]
                              [--full] [--answer [--no-queue]] "pitanje"
 
 --answer: scope check, retrieval, answer with citations (`fast` + `answer` roles). A question the
@@ -28,7 +28,6 @@ def main() -> None:
     ap.add_argument("--version", type=int, help="default: newest version")
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--rerank", type=int, metavar="N", help="rerank the top N dense hits")
-    ap.add_argument("--hybrid", action="store_true", help="dense + sparse, rank-fused")
     ap.add_argument("--full", action="store_true", help="print whole chunks")
     ap.add_argument("--answer", action="store_true", help="generate the clone's answer")
     ap.add_argument("--no-queue", action="store_true", help="do not queue forwarded questions")
@@ -41,9 +40,7 @@ def main() -> None:
         show_answer(args, version.id)
         return
     for i, hit in enumerate(
-        search(
-            version.id, args.question, args.k, rerank_candidates=args.rerank, hybrid=args.hybrid
-        ),
+        search(version.id, args.question, args.k, rerank_candidates=args.rerank),
         1,
     ):
         body = hit.text if args.full else hit.text[:300].replace("\n", " ")
@@ -53,9 +50,7 @@ def main() -> None:
 
 
 def show_answer(args: argparse.Namespace, kb_version_id) -> None:
-    a = answer_question(
-        kb_version_id, args.question, k=args.k, rerank_candidates=args.rerank, hybrid=args.hybrid
-    )
+    a = answer_question(kb_version_id, args.question, k=args.k, rerank_candidates=args.rerank)
     print("AI asistent (odgovara iz materijala kolegija):\n")  # rule 6: always disclosed
     print(a.text + "\n")
     if a.cited:

@@ -7,13 +7,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from pgvector.sqlalchemy import SPARSEVEC, Vector
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 EMBEDDING_DIM = 1024  # BGE-M3 dense
-SPARSE_DIM = 250002  # BGE-M3 vocabulary size
 
 
 class Base(DeclarativeBase):
@@ -113,7 +112,6 @@ class Chunk(Base):
     )
     week_topic: Mapped[str | None] = mapped_column(String(200))
     embedding = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
-    sparse_embedding = mapped_column(SPARSEVEC(SPARSE_DIM), nullable=True)
 
 
 class TeacherQuestion(Base):

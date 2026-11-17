@@ -92,15 +92,6 @@ roles:
     # prozor…", top hits 744/636) while abstain questions reach 0.85, so any floor forwards good
     # questions. With reranking, the scope check and the citation check decide abstention.
 
-  # EXPERIMENT, narrow exception to rule 8: BGE-M3's sparse (lexical) weights for hybrid search.
-  # No server we run returns sparse vectors and LiteLLM has no sparse type, so llm/sparse.py
-  # loads this Hugging Face model in-process (torch, ingest dependency group). Keep it only if
-  # the golden set shows a gain; then move it behind a server the model layer can call.
-  sparse:
-    kind: sparse
-    model: BAAI/bge-m3
-    params:
-      max_length: 8192
 
 # Per-model prompt variants, keyed by LiteLLM model string. Never branch on
 # model names in code; put the variant here instead.

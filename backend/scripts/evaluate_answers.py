@@ -1,7 +1,7 @@
 """Answer evaluation on a subject's question set: does the clone answer, cite and forward right?
 
     uv run python -m scripts.evaluate_answers --subject <id> [--version N] [-k 5] [--rerank 20]
-        [--hybrid] [--set PATH] [--ids e01,h20] [--difficulty hard] [--limit N] [--judge]
+        [--set PATH] [--ids e01,h20] [--difficulty hard] [--limit N] [--judge]
 
 answerable -> answered (not forwarded); cited_expected (the answer cites an expected source).
 out_of_scope / admin / not_in_materials -> forwarded (and with which reason).
@@ -9,7 +9,7 @@ out_of_scope / admin / not_in_materials -> forwarded (and with which reason).
 it claims is in them) and on_topic (it answers the question). No reference answers are used.
 Each question runs the `fast` and `answer` roles (~80 s on a CPU laptop with dev models; --judge
 adds 10-45 s): a 50-question run took 78 min. Forwarded questions are NOT put in the teacher queue.
-Report: eval/reports/<subject>/answers-v<N>[-<set>][-hybrid][-rerankM]-k<K>-<timestamp>.json
+Report: eval/reports/<subject>/answers-v<N>[-<set>][-rerankM]-k<K>-<timestamp>.json
 """
 
 import argparse
@@ -40,7 +40,6 @@ def main() -> None:
     ap.add_argument("--version", type=int)
     ap.add_argument("-k", type=int, default=5)
     ap.add_argument("--rerank", type=int, metavar="N")
-    ap.add_argument("--hybrid", action="store_true")
     ap.add_argument("--set", type=Path, help="set file (default eval/sets/<subject>.yaml)")
     ap.add_argument("--ids", help="comma-separated question ids")
     ap.add_argument("--difficulty", choices=["easy", "hard", "exam", "check"])
@@ -75,7 +74,6 @@ def main() -> None:
                     q.question,
                     k=args.k,
                     rerank_candidates=args.rerank,
-                    hybrid=args.hybrid,
                     check=not args.no_check,
                 )
             )
@@ -107,7 +105,6 @@ def main() -> None:
         "kb_version_id": str(version.id),
         "k": args.k,
         "rerank_candidates": args.rerank,
-        "hybrid": args.hybrid,
         "models": {"embedding": trace_metadata("embedding")}
         | ({"reranker": trace_metadata("reranker")} if args.rerank else {})
         | ({"judge": trace_metadata("judge")} if args.judge else {}),
@@ -125,11 +122,7 @@ def main() -> None:
         if path == default_path.resolve()
         else "-" + path.stem.removeprefix(args.subject).strip("._-")
     )
-    mode = (
-        set_tag
-        + ("-hybrid" if args.hybrid else "")
-        + (f"-rerank{args.rerank}" if args.rerank else "")
-    )
+    mode = set_tag + (f"-rerank{args.rerank}" if args.rerank else "")
     out = REPO_ROOT / "eval" / "reports" / args.subject
     out = out / f"answers-v{version.version}{mode}-k{args.k}-{stamp}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -137,7 +130,7 @@ def main() -> None:
 
     print(
         f"\n{args.subject} v{version.version}, k={args.k}, rerank={args.rerank}, "
-        f"hybrid={args.hybrid}, {len(results)} questions"
+        f"{len(results)} questions"
     )
     for name, values in summary.items():
         print(f"  {name:10} {values}")
