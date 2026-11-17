@@ -728,9 +728,18 @@ Decisions made in step 1:
   - **3 of the 10 `not_in_materials` labels were wrong**: the material does answer t05 (Okvir
     darovite pp. 67–69, cooperation with parents), t51 (25 % underachievers, "3 Uvod" slide 14)
     and x11 (NTC activity list, slide 71). The clone answered all three correctly from those
-    pages. Relabelled `answerable` (teacher set now 77 answerable, v1 dense 0.90 / 0.75; the
-    retrieval table above used 74). The other 25 labels were not re-checked; many are probably
-    right ("bez priručnika"), but each one needs the teacher's eye.
+    pages. Relabelled `answerable`.
+  - **The other 25 labels re-checked** (Claude, keyword search over every page's text, then
+    reading the candidate pages): 2 more relabelled `answerable`: t42 (slide 9:24, rad na
+    projektu) and t56 (Okvir darovite pp. 15–16, teškoće u socijalnim odnosima; partial). 23
+    stay `not_in_materials`: Vygotsky, Piaget's stages, assimilation/accommodation, active
+    learning, experiments, critical-thinking phases, Rajović's claims, computers, NTC exercise
+    descriptions (the NTC slides list names only or are pictures), x06's feeling processes
+    (slides 6:70–72 cover only the thinking factors). Borderline, noted for the teacher: t06
+    (Okvir mentions the team and educators only in passing), t54 (the slides are images, so
+    with a `vision` caption it may become answerable). Teacher set now **79 answerable, 23
+    `not_in_materials`, 5 Italian**; v1 dense **0.90 / 0.75** (the retrieval table above used
+    the first 74).
   - Answerable: **18/18 answered citing an expected slide** (15 exam + the 3 relabelled); judge
     grounded 0.80 (noisy as before).
   - Handbook-only (7 left): **5 forwarded** (`no_source`); **x03** answered from a creativity
@@ -758,8 +767,8 @@ Next:
    teacher, not a retrieval one.
 2. Second subject (`Rad_s_darovitom_djecom`, PPTX + PDF) ingested and retrieval measured (see
    above): `--context` and hybrid not confirmed; 40-question answer sample done (answerable
-   18/18, must-forward 12/16). Left: the teacher confirms the `not_in_materials` labels (3 of 10
-   checked were wrong); answers stretched from a list or a nearby page (x03, x13, i01, i05) need a
+   18/18, must-forward 12/16). `not_in_materials` labels re-checked (5 of 28 were answerable).
+   Left: the teacher confirms the remaining 23 and the borderline t06/t54; answers stretched from a list or a nearby page (x03, x13, i01, i05) need a
    stricter check, likely a stronger `check` model on vLLM; decide whether to drop the sparse
    experiment.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer

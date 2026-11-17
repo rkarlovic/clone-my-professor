@@ -82,7 +82,10 @@ answer, and the automatic set of 60 + 12.
   Croatian, as always. The automatic check does not yet catch this kind of stretching; a
   stronger model on the pilot server is the likely fix.
 - Three questions we had marked "handbook only" turned out to be answered by the slides
-  after all, and the clone answered them correctly. So these labels need the teacher's review.
+  after all, and the clone answered them correctly. A re-check of all 28 such questions
+  against the slide and PDF text found 5 that the material does answer; 23 really are only in
+  the handbook (e.g. Vygotsky, Piaget's stages, descriptions of NTC exercises). The teacher
+  confirms the final list.
 
 **Latest results** (2026-11-15):
 
