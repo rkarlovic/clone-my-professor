@@ -722,15 +722,46 @@ Decisions made in step 1:
     `not_in_materials` / Italian up to 0.71; on the check set the generic questions (max 0.54)
     sit just under the answerable minimum (0.56). Rerank gives a `not_in_materials` question
     (t33) 0.99.
+- **Answer sample (2026-11-17)**, v1 dense k=5, `--judge`, all step-2 rules, 40 questions
+  (seeded: 15 answerable + 10 `not_in_materials` + the 5 Italian from the teacher set; 6 slide +
+  4 generic from the check set) in **5,441 s** (4,210 + 1,231; ~2.3 min per question), no errors.
+  - **3 of the 10 `not_in_materials` labels were wrong**: the material does answer t05 (Okvir
+    darovite pp. 67–69, cooperation with parents), t51 (25 % underachievers, "3 Uvod" slide 14)
+    and x11 (NTC activity list, slide 71). The clone answered all three correctly from those
+    pages. Relabelled `answerable` (teacher set now 77 answerable, v1 dense 0.90 / 0.75; the
+    retrieval table above used 74). The other 25 labels were not re-checked; many are probably
+    right ("bez priručnika"), but each one needs the teacher's eye.
+  - Answerable: **18/18 answered citing an expected slide** (15 exam + the 3 relabelled); judge
+    grounded 0.80 (noisy as before).
+  - Handbook-only (7 left): **5 forwarded** (`no_source`); **x03** answered from a creativity
+    slide (6:63, "do 6-7. godine") and attributed it to Rajović, which the slide does not say;
+    **x13** named a real NTC game from slide 70's list and added a description not on the slide
+    ("cilj je raditi s asocijacijama"). Check verdict ODGOVARA=DA for both: the 9B check does not
+    notice a claim that goes beyond a list slide.
+  - Italian (other subject, docimologia): **3 forwarded** (`no_source`), **i01 and i05
+    answered** — in Croatian, from this course's own pages on *vrednovanje* (assessment), which
+    the Okvir PDFs cover: i01 lists Okvir assessment content as "functions of assessment"
+    (check IZVAN=DA, ODGOVARA=NE, not mostly a refusal, so not forwarded); i05 answers
+    "distortions of assessment" with slide 8:24's over/underestimated children. The scope check
+    labelled all five GRADIVO: the topic overlaps this course, so this is not a language problem.
+  - Check set: slide questions 5/6 answered (c051 forwarded `no_source`, retrieval had slide
+    33); cites the expected slide 2/6, but the other answers cite slides on the same topic
+    (c010 synapse slide 25 for 43; c053 Okvir p. 33 for 46), judge grounded 6/6. Generic
+    abstention 4/4 forwarded (g04 `admin`, g09/g11 `out_of_scope`, g12 `no_source`).
+  - Rule 2 on this course: 12 of 16 must-forward questions in the sample forwarded (the 4 generic,
+    5 of 7 handbook-only, 3 of 5 Italian). The misses are answers stretched from a nearby page,
+    the same failure as h22/h11 on the Java course, not invented topics.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
    teacher, not a retrieval one.
 2. Second subject (`Rad_s_darovitom_djecom`, PPTX + PDF) ingested and retrieval measured (see
-   above): `--context` and hybrid not confirmed. Left: an answer run on a sample (~40 questions,
-   v1 dense: answerable, `not_in_materials`, Italian, generic), above all whether the 28
-   handbook-only questions get forwarded; decide whether to drop the sparse experiment.
+   above): `--context` and hybrid not confirmed; 40-question answer sample done (answerable
+   18/18, must-forward 12/16). Left: the teacher confirms the `not_in_materials` labels (3 of 10
+   checked were wrong); answers stretched from a list or a nearby page (x03, x13, i01, i05) need a
+   stricter check, likely a stronger `check` model on vLLM; decide whether to drop the sparse
+   experiment.
 3. Step 2 part A (prompt fixes and the live answer check done, see above): DRUGO no longer
    forwards alone (t04 fixed); teacher's 60 answered 0.98 (t25's refusal now forwards, replayed only); h22's prose answers now forward via `is_mostly_refusal` (6/6 abstain in
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence

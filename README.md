@@ -70,10 +70,19 @@ answer, and the automatic set of 60 + 12.
   each slide made search worse (89 % → 84 %): on a course about one topic, every slide got almost
   the same sentence. The keyword search and the slower re-ranking did not improve results either.
   So the simplest setup is the best one here, and those tricks stay switched off by default.
-- 28 of the teacher's questions are answered only in the course handbook, which is not part of
-  the material. Their search scores look just like those of answerable questions, so only the
-  answer step can send them to the teacher. That is the next thing to measure, on a sample of
-  about 40 questions (each answer takes about two minutes on this laptop).
+- Many of the teacher's questions seemed to be answered only in the course handbook, which is
+  not part of the material. Their search scores look just like those of answerable questions, so
+  only the answer step can send them to the teacher.
+- **Answers, on a sample of 40 questions** (about 2 hours on this laptop): every one of the 18
+  answerable questions was answered citing the right slide. Of the 16 it must not answer, it
+  forwarded 12. The 4 that slipped through were stretched from a nearby page: an NTC game
+  named on a list slide got a made-up description, a creativity slide was attributed to the
+  wrong author, and two exam questions from another subject (on assessment, which this
+  course's guidelines also cover) got answers from those guidelines. The answers were in
+  Croatian, as always. The automatic check does not yet catch this kind of stretching; a
+  stronger model on the pilot server is the likely fix.
+- Three questions we had marked "handbook only" turned out to be answered by the slides
+  after all, and the clone answered them correctly. So these labels need the teacher's review.
 
 **Latest results** (2026-11-15):
 
@@ -109,8 +118,8 @@ Everything stopped goes to the teacher's question queue.
   instructions did not make it more reliable; a stronger grader model is the likely fix.
 - A few slides themselves are outdated or contain errors; that list goes to the teacher.
 
-**Next:** answers on the second course (especially the questions only the handbook answers),
-fixes for the weak spots above, the teacher's review of the question set, then step 3: chat window, teacher
+**Next:** fixes for the weak spots above (on both courses, answers stretched from a nearby
+slide are the main one), the teacher's review of the question set, then step 3: chat window, teacher
 dashboard and upload. Choosing the final AI model waits for the pilot server.
 
 ## Principles
