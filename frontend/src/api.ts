@@ -28,8 +28,28 @@ export interface Version {
   pending_files: string[];
   approved_at: string | null;
   activated_at: string | null;
+  check_status: "queued" | "running" | "done" | "failed" | null;
+  check: CheckReport | null;
   summary: VersionSummary | null;
   documents: { file_name: string; file_hash: string }[] | null;
+}
+
+export interface CheckReport {
+  questions: number;
+  found_top5: number;
+  recall_at_5: number | null;
+  written: number;
+  misses: { id: string; question: string; file_name: string; page: number }[];
+  seconds: number;
+}
+
+export interface CheckQuestion {
+  id: string;
+  question: string;
+  style: string;
+  file_name: string;
+  page: number;
+  created_at: string;
 }
 
 export interface SourceRef {
@@ -129,6 +149,9 @@ export const teacherApi = {
       method: "POST",
       body: json({ answer, sources }),
     }),
+  checks: (kb: string) => request<CheckQuestion[]>("teacher", `/api/courses/${kb}/checks`),
+  deleteCheck: (kb: string, id: string) =>
+    request<void>("teacher", `/api/courses/${kb}/checks/${id}`, { method: "DELETE" }),
   dismiss: (kb: string, id: string) =>
     request<QueueItem>("teacher", `/api/courses/${kb}/questions/${id}/dismiss`, { method: "POST" }),
 };

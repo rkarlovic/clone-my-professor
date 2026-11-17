@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { teacherApi, type Course, type Version } from "../api";
+import { CheckQuestions } from "../components/CheckQuestions";
 import { QuestionQueue } from "../components/QuestionQueue";
 import { UploadBox } from "../components/UploadBox";
 import { VersionRow } from "../components/VersionRow";
@@ -11,7 +12,7 @@ export function CoursePage({ kbId }: { kbId: string }) {
   const [course, setCourse] = useState<Course | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [files, setFiles] = useState<string[]>([]); // documents of the active version
-  const [tab, setTab] = useState<"materials" | "questions">("materials");
+  const [tab, setTab] = useState<"materials" | "questions" | "checks">("materials");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -36,11 +37,13 @@ export function CoursePage({ kbId }: { kbId: string }) {
 
   // While an upload is being processed, refresh until it is ready or failed.
   const busy = versions.some((v) => v.ingest_status === "queued" || v.ingest_status === "processing");
+  const checking = versions.some((v) => v.check_status === "queued" || v.check_status === "running");
   useEffect(() => {
-    if (!busy) return;
+    if (!busy && !checking) return;
     const t = setInterval(load, POLL_MS);
     return () => clearInterval(t);
-  }, [busy, load]);
+  }, [busy, checking, load]);
+  const latestCheck = versions.find((v) => v.check_status === "done")?.check ?? null;
 
   const chatLink = `${window.location.origin}${window.location.pathname}${href.chat(kbId)}`;
 
@@ -78,6 +81,9 @@ export function CoursePage({ kbId }: { kbId: string }) {
         >
           Pitanja studenata
         </button>
+        <button role="tab" aria-selected={tab === "checks"} onClick={() => setTab("checks")}>
+          Provjerna pitanja
+        </button>
       </div>
 
       {tab === "materials" ? (
@@ -94,8 +100,10 @@ export function CoursePage({ kbId }: { kbId: string }) {
             </ul>
           )}
         </>
-      ) : (
+      ) : tab === "questions" ? (
         <QuestionQueue kbId={kbId} files={files} />
+      ) : (
+        <CheckQuestions kbId={kbId} latest={latestCheck} />
       )}
     </main>
   );

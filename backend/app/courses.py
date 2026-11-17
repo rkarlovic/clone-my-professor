@@ -22,9 +22,10 @@ from core.approval import (
     approve_version,
     discard_version,
 )
+from core.checks import delete_question
 from core.db import app_engine, kb_scope
 from core.kb import NothingChanged, StillProcessing, create_upload_version
-from core.models import Document, IngestStatus, KbVersion, KnowledgeBase
+from core.models import CheckQuestion, Document, IngestStatus, KbVersion, KnowledgeBase
 from core.storage import UploadError, store_upload
 from jobs import enqueue_ingest
 
@@ -55,6 +56,9 @@ class VersionOut(BaseModel):
     pending_files: list[str]  # uploaded in this version (processed or still to process)
     approved_at: datetime | None = None
     activated_at: datetime | None = None
+    # The background check: queued | running | done | failed (None: not run); its result
+    check_status: str | None = None
+    check: dict | None = None
     summary: dict | None = None  # from the ingest report, once ready
     documents: list[DocumentOut] | None = None  # only on the detail view, once ready
 
@@ -92,6 +96,8 @@ def _out(v: KbVersion, documents: list[DocumentOut] | None = None) -> VersionOut
         pending_files=[f["file_name"] for f in v.pending_files],
         approved_at=v.approved_at,
         activated_at=v.activated_at,
+        check_status=v.check_status,
+        check=v.check_report,
         summary=_summary(v.ingest_report),
         documents=documents,
     )
@@ -231,4 +237,47 @@ def activate(kb_id: uuid.UUID, number: int, teacher: TeacherDep) -> VersionOut:
 def discard(kb_id: uuid.UUID, number: int, teacher: TeacherDep) -> Response:
     """Discard a draft (never an approved or active version)."""
     _step(kb_id, number, teacher.id, discard_version)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class CheckQuestionOut(BaseModel):
+    id: uuid.UUID
+    question: str
+    style: str  # casual | symptom | english | paraphrase | no_diacritics
+    file_name: str
+    page: int
+    created_at: datetime
+
+
+@router.get("/{kb_id}/checks")
+def list_checks(kb_id: uuid.UUID, teacher: TeacherDep) -> list[CheckQuestionOut]:
+    """The course's auto-generated check questions (not deleted), by file and slide. A question
+    is used for a version only while that version holds the same file content."""
+    with Session(app_engine()) as s:
+        _own_course(s, teacher.id, kb_id)
+        rows = s.scalars(
+            select(CheckQuestion)
+            .where(CheckQuestion.kb_id == kb_id, CheckQuestion.deleted_at.is_(None))
+            .order_by(CheckQuestion.file_name, CheckQuestion.page)
+        ).all()
+        return [
+            CheckQuestionOut(
+                id=q.id,
+                question=q.question,
+                style=q.style,
+                file_name=q.file_name,
+                page=q.page,
+                created_at=q.created_at,
+            )
+            for q in rows
+        ]
+
+
+@router.delete("/{kb_id}/checks/{question_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_check(kb_id: uuid.UUID, question_id: uuid.UUID, teacher: TeacherDep) -> Response:
+    """Delete a bad check question; it is not written again for the same file."""
+    with Session(app_engine()) as s, s.begin():
+        _own_course(s, teacher.id, kb_id)
+        if not delete_question(s, kb_id, question_id):
+            raise HTTPException(404, "check question not found")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

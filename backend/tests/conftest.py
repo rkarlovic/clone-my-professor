@@ -79,6 +79,7 @@ def course(owner_engine: Engine) -> Iterator[tuple[uuid.UUID, str]]:
     with owner_engine.begin() as conn:
         p = {"k": kb}
         versions = "SELECT id FROM kb_version WHERE kb_id = :k"
+        conn.execute(text("DELETE FROM check_question WHERE kb_id = :k"), p)
         conn.execute(text("DELETE FROM chat_message WHERE kb_id = :k"), p)
         conn.execute(text("DELETE FROM teacher_question WHERE kb_id = :k"), p)
         conn.execute(text(f"DELETE FROM chunk WHERE kb_version_id IN ({versions})"), p)

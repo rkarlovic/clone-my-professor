@@ -58,6 +58,7 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
   margin: 12px 0;
 }
 .card.ok { border-color: var(--ok); background: var(--ok-bg); }
+.card { overflow-wrap: anywhere; }
 .muted { color: var(--muted); }
 .small { font-size: 0.9rem; }
 .center { text-align: center; }
@@ -143,3 +144,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .ask { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 16px; background: var(--bg); border-top: 1px solid var(--line); align-items: end; }
 .ask textarea { flex: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.check-line.good { color: var(--ok); }
+.check-line.weak { color: var(--bad); }
+.checks { list-style: none; padding: 0; }
+.checks li { display: flex; gap: 8px; align-items: baseline; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.checks li.missed { background: var(--bad-bg); }

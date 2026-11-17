@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # "dev": the teacher is named by the X-CMP-Dev-Teacher header (no sign-in; never in
     # production). SSO (Microsoft/Google) replaces it before the pilot.
     auth_mode: str = "dev"
+    # Auto-generated check questions per course (spread over the material by slide count).
+    # On a CPU laptop each takes ~18 s with the dev 9B; on the pilot GPU about a second.
+    check_questions: int = 60
 
     @property
     def jobs_conninfo(self) -> str:

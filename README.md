@@ -163,8 +163,16 @@ see what the assistant is doing while it works, then the answer with clickable s
 and later the teacher's own answers to their forwarded questions. The whole loop was tried
 in a browser on the second course. Sign-in is still a development stand-in (just a name).
 
-**Next:** in step 3, the automatic test questions after each upload and the teacher's
-settings; then real sign-in and the Moodle connector (step 4). Fixes for the weak spots above (on both courses, answers
+**Step 3, sixth piece (2026-11-17): test questions after every upload.** After each upload
+the system writes student-style questions from the new slides by itself (about 60 per
+course, in several styles) and checks whether the assistant finds the slide each question
+came from. The teacher sees the result while reviewing the draft ("finds the right slide
+for 8 of 8 check questions"), can look through the questions and delete bad ones; nothing
+is required of them. Unchanged files keep their questions. On this laptop a full check takes
+about 18 minutes; on the pilot server, about a minute.
+
+**Next:** in step 3, the teacher's settings for the assistant (persona); then real sign-in
+and the Moodle connector (step 4). Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 

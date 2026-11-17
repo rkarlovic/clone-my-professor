@@ -75,6 +75,7 @@ export function VersionRow({
           {Math.round(v.summary.seconds)} s
         </p>
       )}
+      {ready && <CheckLine version={v} />}
       <div className="row actions">
         {ready && (
           <button type="button" className="link" onClick={toggleDetail}>
@@ -158,5 +159,25 @@ export function VersionRow({
         </div>
       )}
     </li>
+  );
+}
+
+/** The background check: how often search finds the slide a check question was written from. */
+export function CheckLine({ version: v }: { version: Version }) {
+  if (v.check_status === "queued" || v.check_status === "running")
+    return <p className="small muted">Provjera asistenta u tijeku…</p>;
+  if (v.check_status === "failed")
+    return (
+      <p className="small error">Provjera asistenta nije uspjela; materijali su obrađeni normalno.</p>
+    );
+  const c = v.check;
+  if (v.check_status !== "done" || !c || c.questions === 0) return null;
+  const pct = Math.round((100 * c.found_top5) / c.questions);
+  return (
+    <p className={`small check-line ${pct >= 80 ? "good" : "weak"}`}>
+      Provjera: asistent pronalazi pravi slajd za {c.found_top5} od {c.questions} provjernih
+      pitanja ({pct} %).
+      {pct < 80 && " Pitanja koja promašuje označena su u kartici „Provjerna pitanja”."}
+    </p>
   );
 }

@@ -100,6 +100,9 @@ class KbVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Background check after processing: queued | running | done | failed (None: never run)
+    check_status: Mapped[str | None] = mapped_column(String(20))
+    check_report: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class Document(Base):
@@ -179,3 +182,21 @@ class ChatMessage(Base):
     feedback: Mapped[int | None] = mapped_column(Integer)  # 1 helpful, -1 not helpful
     feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class CheckQuestion(Base):
+    """A student-style question the model wrote from one slide (the auto-generated check set).
+    Valid for every version holding the same file content (file_name + file_hash)."""
+
+    __tablename__ = "check_question"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    question: Mapped[str] = mapped_column(Text)
+    style: Mapped[str] = mapped_column(String(30))
+    file_name: Mapped[str] = mapped_column(String(500))
+    file_hash: Mapped[str] = mapped_column(String(64))
+    page: Mapped[int] = mapped_column(Integer)
+    created_for_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("kb_version.id"))
+    trace: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

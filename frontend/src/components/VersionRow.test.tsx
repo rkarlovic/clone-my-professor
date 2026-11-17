@@ -11,6 +11,8 @@ const base: Version = {
   pending_files: ["9 Osnovne potrebe.pptx"],
   approved_at: null,
   activated_at: null,
+  check_status: null,
+  check: null,
   summary: {
     documents: 1,
     pages: 32,
@@ -53,4 +55,15 @@ test("a failed version shows the reason and a retry", () => {
     "Pokušaj ponovno",
   ]);
   expect(screen.getByText(/could not be read/)).toBeInTheDocument();
+});
+
+test("a finished check says how often search finds the right slide", () => {
+  const check = { questions: 20, found_top5: 15, recall_at_5: 0.75, written: 20, misses: [], seconds: 9 };
+  buttons({ check_status: "done", check });
+  expect(screen.getByText(/za 15 od 20 provjernih pitanja \(75 %\)/)).toBeInTheDocument();
+});
+
+test("a running check is announced", () => {
+  buttons({ check_status: "running" });
+  expect(screen.getByText(/Provjera asistenta u tijeku/)).toBeInTheDocument();
 });

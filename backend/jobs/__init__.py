@@ -28,3 +28,14 @@ def enqueue_ingest(kb_version_id: uuid.UUID, kb_id: uuid.UUID) -> int:
     return ingest_version.configure(
         lock=f"kb:{kb_id}", queueing_lock=f"ingest:{kb_version_id}"
     ).defer(kb_version_id=str(kb_version_id))
+
+
+def enqueue_checks(kb_version_id: uuid.UUID, kb_id: uuid.UUID) -> int:
+    """Queue the check of a processed version (write check questions for new documents, score
+    its search). Same per-course lock as ingest, so two checks never write questions for the
+    same new document at once."""
+    from jobs.tasks import check_version
+
+    return check_version.configure(
+        lock=f"kb:{kb_id}", queueing_lock=f"check:{kb_version_id}"
+    ).defer(kb_version_id=str(kb_version_id))

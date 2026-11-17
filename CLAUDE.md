@@ -939,6 +939,41 @@ Decisions made in step 1:
 - Not yet: the production image (static build behind Caddy) and HTTPS proxy, real sign-in,
   LTI launch into the chat, notifications, the teacher's settings page.
 
+**Step 3, part 6: the check set after every upload (2026-11-17).**
+- Check questions now live in the database (`check_question`, migration `0011`), tied to the
+  course and to a document's **content** (file name + hash) and slide: valid for every version
+  holding the same file, so carried-over documents keep their questions and a changed file gets
+  new ones. Teacher deletions are soft (`deleted_at`) and stick: a document with any question,
+  deleted or not, gets no new ones.
+- `core/checks.py` `run_checks`: for documents of the version without questions, writes about
+  `CHECK_QUESTIONS` (setting, default 60) per course, each document's share by its eligible
+  slides (at least one), with the step-2 generator (`core.checkset`: spread over the document,
+  styles in turn, `PRESKOČI` → next slide); then searches every valid question in the version
+  (dense, k=5) and stores `check_report` (questions, found in top 5, recall@5, MRR, written,
+  up to 20 misses, seconds, model ids) with `check_status` (queued | running | done | failed).
+  Search only: the answer-level check (grounding, the 12 generic forward questions) needs the
+  pilot GPU. The YAML generator (`scripts.checkset`) stays for evaluation runs.
+- Job: `ingest_version` queues `check_version` after a successful ingest (through
+  `jobs.enqueue_checks`; same per-course lock, so two checks never write questions for one
+  new document); a failed check never fails the ingest. Queueing from inside a running job
+  works (checked live).
+- API: versions carry `check_status` and `check`; `GET /api/courses/{kb_id}/checks`,
+  `DELETE /api/courses/{kb_id}/checks/{id}`. Pages: each processed version shows "Provjera:
+  asistent pronalazi pravi slajd za X od Y provjernih pitanja (Z %)" (green ≥ 80 %, otherwise
+  red with a pointer to the misses) or "Provjera asistenta u tijeku…"; the page polls while a
+  check runs; a third tab "Provjerna pitanja" lists the questions (file, slide, style; misses
+  marked) with "Obriši".
+- Tests: backend 3 (shares by slide count; questions follow document content across versions,
+  deletions stick and are not scored; the job records status/report; API list/delete/ownership),
+  frontend 2 (check line done/running).
+- **Live (demo course, worker with `CHECK_QUESTIONS=8`)**: uploading "12 Predrasude" as v2
+  (the first lecture carried over, neither had questions) → ingest, then the check queued itself:
+  8 questions written (5 for "7 Identifikacija", 3 for "12 Predrasude", by slide count; casual,
+  symptom, English, paraphrase, no diacritics), search found all 8 (100 %), **146 s** for the
+  check on CPU (~18 s per question with the 9B). The version row showed the result.
+- Note: on this CPU a 60-question check takes ~18 min after an upload and holds the course
+  lock, so a second upload waits behind it (it shows as queued).
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -953,7 +988,7 @@ Next:
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
    rule tried and reverted, judge prompt wording does not help (see above); the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets: generator and first set done (retrieval measured, see above);
-   answer run on it done (abstain 11/12; the missed attendance question g06 now forwards via `ADMIN_TERMS`); left: hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
+   answer run on it done (abstain 11/12; the missed attendance question g06 now forwards via `ADMIN_TERMS`); hooked into ingest with teacher deletion in the UI (step 3, part 6). Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.
