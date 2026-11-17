@@ -51,6 +51,18 @@ export function LmsLinks({ kbId, onSynced }: { kbId: string; onSynced: () => voi
     }
   }
 
+  async function setSections(link: LmsLink, section: string) {
+    const chosen = link.auto_add_sections.includes(section)
+      ? link.auto_add_sections.filter((x) => x !== section)
+      : [...link.auto_add_sections, section];
+    try {
+      await lmsApi.settings(kbId, link.id, link.sync_enabled, chosen);
+      load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function syncNow(link: LmsLink) {
     setError("");
     try {
@@ -76,6 +88,23 @@ export function LmsLinks({ kbId, onSynced }: { kbId: string; onSynced: () => voi
                 Svakih 20 minuta provjeri ima li novih ili promijenjenih datoteka (nova verzija uvijek
                 čeka vaš pregled)
               </label>
+              {l.sync_enabled && l.sections.length > 0 && (
+                <fieldset className="sections">
+                  <legend className="small">
+                    Nove datoteke iz ovih cjelina objavi odmah, bez pregleda (ostale čekaju vaš pregled):
+                  </legend>
+                  {l.sections.map((sec) => (
+                    <label key={sec} className="inline small">
+                      <input
+                        type="checkbox"
+                        checked={l.auto_add_sections.includes(sec)}
+                        onChange={() => setSections(l, sec)}
+                      />
+                      {sec}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
               <div className="row actions">
                 <button type="button" className="secondary" disabled={waiting === l.id} onClick={() => syncNow(l)}>
                   {waiting === l.id ? "Provjeravam…" : "Provjeri sada"}

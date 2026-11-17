@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 from connectors.base import Material
 from connectors.moodle.client import MoodleClient, MoodleError
 from core.db import kb_scope
-from core.models import Document, IngestStatus, KbVersion, LtiPlatform, PlatformContextMap
+from core.models import (
+    Document,
+    IngestStatus,
+    KbVersion,
+    LmsFile,
+    LtiPlatform,
+    PlatformContextMap,
+)
 from core.settings import get_settings
 from core.sync import sync_course, unique_names
 
@@ -202,3 +209,39 @@ def test_moodle_client_takes_only_visible_supported_files(monkeypatch) -> None:
     foreign = Material("x", "x.pdf", 1, 1, url="https://evil.test/x.pdf")
     with pytest.raises(MoodleError, match="outside the platform"):
         next(client.download(foreign))
+
+
+def test_auto_add_sections_publish_only_when_every_new_file_is_in_them(
+    app_engine: Engine, link
+) -> None:
+    map_id, kb_id = link
+    with Session(app_engine) as s, s.begin():
+        s.get(PlatformContextMap, map_id).auto_add_sections = ["Predavanja"]
+
+    class Sectioned(FakeLms):
+        def list_materials(self, course_id):
+            return [
+                Material(
+                    eid, name, len(data), mod, section=("Vježbe" if "vj" in name else "Predavanja")
+                )
+                for eid, (name, data, mod) in self.files.items()
+            ]
+
+    lms = Sectioned({"1/p1.pdf": ("p1.pdf", b"%PDF p1", 1)})
+    queued: list = []
+
+    def run():
+        return sync_course(
+            map_id, connector_factory=lambda p: lms, enqueue=lambda v, k: queued.append(v)
+        )
+
+    r = run()
+    assert r["status"] == "new_version" and r["published"] is True
+    with Session(app_engine) as s:
+        assert s.query(KbVersion).filter_by(kb_id=kb_id, version=1).one().auto_activate
+        assert {f.section for f in s.query(LmsFile).filter_by(map_id=map_id)} == {"Predavanja"}
+    _process(app_engine, kb_id, 1)
+    lms.files["2/vj1.pdf"] = ("vj1.pdf", b"%PDF vj1", 1)  # outside the auto-add sections
+    lms.files["3/p2.pdf"] = ("p2.pdf", b"%PDF p2", 1)
+    r = run()
+    assert r["status"] == "new_version" and r["published"] is False  # all wait for review

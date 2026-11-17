@@ -1177,6 +1177,27 @@ LMS leaves the live version **at once**, without the teacher's approval (rule 5 
   read marking limited to the reader), frontend 1 (notice wording). Not checked in a browser.
 - Not yet: e-mail or LMS messages (would need addresses or the LMS messaging API).
 
+**Step 4, part 6: embed, auto-add sections, retention, admin page (2026-11-18).**
+- **Embedded launch**: the local Moodle activity switched to "embed" (launch container 2): the
+  chat opens inside the Moodle page and works (session token in the frame's sessionStorage, no
+  cookies). The production proxy must allow framing by the registered LMS origins
+  (`frame-ancestors`, part 7).
+- **Auto-add from selected sections** (CLAUDE.md "Connectors"): `platform_context_map.
+  auto_add_sections` and `lms_file.section` (migration `0018`). New or changed files are
+  published without review only when **every** new file of that sync is in a chosen section;
+  otherwise all wait as a draft. Notice `lms_added`. The LMS box lists the sections seen at the
+  last sync as checkboxes (shown once sync is on). Test: in-section file published, a mixed
+  sync waits for review.
+- **Retention** (rule 9, `core/retention.py`): a daily job (`retention`, 03:17) deletes chat
+  exchanges and answered/dismissed forwarded questions older than `RETENTION_DAYS` (default
+  180), notifications older than that or read for 30 days, LTI login states after a day. Open
+  questions and course content (material, versions, check questions) stay. Test included.
+- **Admin page** `#/admin` + `app/admin.py`: the tool URLs to give an LMS admin, registered
+  platforms, register/edit (incl. Web Services address and the *name* of the token variable,
+  validated as an env-var name; shows whether that variable is set on the server). Protected by
+  `ADMIN_TOKEN` (.env, ≥ 32 chars) in `X-CMP-Admin-Token`; without it the admin API answers 403.
+  Checked in the browser. Test included.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the

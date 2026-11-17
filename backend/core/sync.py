@@ -94,6 +94,7 @@ def sync_course(
         link = s.get(PlatformContextMap, map_id)
         platform = s.get(LtiPlatform, link.platform_id)
         kb_id, course_id = link.kb_id, link.context_id
+        auto_sections = set(link.auto_add_sections or [])
         known = {
             f.external_id: f for f in s.scalars(select(LmsFile).where(LmsFile.map_id == map_id))
         }
@@ -112,6 +113,8 @@ def sync_course(
             path = seen and seen.file_hash and _stored_path(kb_id, seen.file_hash, name)
             if same and path and path.exists():
                 files.append(StoredFile(name, seen.file_hash, path, m.size))
+                if seen.section != m.section:
+                    _remember(map_id, m, name, seen.file_hash)
                 continue
             try:
                 stored = store_upload(kb_id, name, _Stream(connector.download(m)))
@@ -166,14 +169,22 @@ def sync_course(
         if not new:
             report["status"] = "unchanged"
         else:
+            # "Auto-add from selected sections": published without review only when every new
+            # file is in one of the teacher's chosen sections; otherwise all wait as a draft.
+            section_of = {names[m.external_id]: m.section for m in materials}
+            auto = bool(auto_sections) and all(
+                section_of.get(f.file_name, "") in auto_sections for f in new
+            )
             with Session(app_engine(), expire_on_commit=False) as s, s.begin():
                 kb = s.get(KnowledgeBase, kb_id)
                 version = create_upload_version(s, kb, new, origin="lms")
+                version.auto_activate = auto
             enqueue(version.id, kb_id)
             report |= {
                 "status": "new_version",
                 "version": version.version,
                 "new_files": [f.file_name for f in new],
+                "published": auto,
             }
     except SyncNotConfigured as e:
         report |= {"status": "not_configured", "error": str(e)}
@@ -265,6 +276,7 @@ def _remember(map_id: uuid.UUID, m: Material, name: str, file_hash: str) -> None
         ).first() or LmsFile(map_id=map_id, external_id=m.external_id)
         row.file_name, row.filesize, row.timemodified = name, m.size, m.modified
         row.file_hash, row.seen_at = file_hash, datetime.now(UTC)
+        row.section = m.section or ""
         s.add(row)
 
 

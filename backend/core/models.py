@@ -268,6 +268,8 @@ class PlatformContextMap(Base):
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_sync_status: Mapped[str | None] = mapped_column(String(20))
     last_sync_report: Mapped[dict | None] = mapped_column(JSONB)
+    # LMS sections whose new files are published without review; empty = always ask
+    auto_add_sections: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
 
 
 class LmsFile(Base):
@@ -281,6 +283,7 @@ class LmsFile(Base):
     filesize: Mapped[int] = mapped_column(BigInteger)
     timemodified: Mapped[int] = mapped_column(BigInteger)
     file_hash: Mapped[str | None] = mapped_column(String(64))
+    section: Mapped[str] = mapped_column(String(500), default="")
     seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

@@ -23,6 +23,7 @@ KINDS = {
     "draft_ready": "a new version is processed and waits for review",
     "draft_failed": "processing a new version failed",
     "lms_removed": "files gone from the LMS were removed from the published version",
+    "lms_added": "new files from auto-add sections were published",
     "question": "a student's question was forwarded",
     "persona_active": "new assistant settings passed the check and are active",
     "persona_rejected": "new assistant settings did not pass the check",

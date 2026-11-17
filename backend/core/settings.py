@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # Auto-generated check questions per course (spread over the material by slide count).
     # On a CPU laptop each takes ~18 s with the dev 9B; on the pilot GPU about a second.
     check_questions: int = 60
+    # Rule 9: chat exchanges and handled forwarded questions are deleted after this many days.
+    retention_days: int = 180
+    # Admin pages (platform registration). Bearer for /api/admin; set in .env (>= 32 chars);
+    # without it the admin API is closed.
+    admin_token: str | None = None
     # Persona activation check: this many of the course's check questions (plus the generic
     # forward questions) are answered with the new persona; it goes live only if at least
     # `persona_min_forwarded` of the generic ones are forwarded and `persona_min_answered` of the

@@ -26,6 +26,9 @@ export function HomePage() {
         Razvojna verzija: prijava je samo ime, bez lozinke. Prava prijava (Microsoft/Google, LTI)
         dolazi prije pilota.
       </p>
+      <p className="small">
+        <a href="#/admin">Administracija</a> (za one koji vode instalaciju)
+      </p>
     </main>
   );
 }

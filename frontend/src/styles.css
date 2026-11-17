@@ -162,3 +162,6 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; }
 .lms-link:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
 .notices ul { padding-left: 1.2rem; margin: 4px 0; }
 .notices li { margin: 4px 0; }
+.sections { border: none; padding: 0; margin: 6px 0; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.sections legend { width: 100%; margin-bottom: 4px; }
+code { font-size: 0.85rem; overflow-wrap: anywhere; }

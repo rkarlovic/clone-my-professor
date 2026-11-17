@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth import TeacherDep
 from app.courses import _own_course
 from core.db import app_engine
-from core.models import LtiPlatform, PlatformContextMap
+from core.models import LmsFile, LtiPlatform, PlatformContextMap
 from jobs import enqueue_sync
 
 router = APIRouter(prefix="/api/courses", tags=["lms"])
@@ -34,14 +34,19 @@ class LmsLinkOut(BaseModel):
     last_sync_at: datetime | None
     last_sync_status: str | None
     last_sync_report: dict | None
+    auto_add_sections: list[str]  # new files from these sections are published without review
+    sections: list[str]  # sections seen at the last sync (to choose from)
 
 
 class SyncSettingsIn(BaseModel):
     sync_enabled: bool
+    auto_add_sections: list[str] | None = None  # None: unchanged
 
 
-def _out(link: PlatformContextMap, platform: LtiPlatform) -> LmsLinkOut:
+def _out(link: PlatformContextMap, platform: LtiPlatform, sections: list[str]) -> LmsLinkOut:
     return LmsLinkOut(
+        auto_add_sections=list(link.auto_add_sections or []),
+        sections=sections,
         id=link.id,
         platform=platform.name,
         context_title=link.context_title,
@@ -71,7 +76,7 @@ def links(kb_id: uuid.UUID, teacher: TeacherDep) -> list[LmsLinkOut]:
             .where(PlatformContextMap.kb_id == kb_id)
             .order_by(PlatformContextMap.created_at)
         ).all()
-        return [_out(link, platform) for link, platform in rows]
+        return [_out(link, platform, _sections(s, link.id)) for link, platform in rows]
 
 
 @router.put("/{kb_id}/lms/{link_id}")
@@ -83,7 +88,12 @@ def settings(
         if body.sync_enabled and not (platform.ws_base_url and platform.ws_token_env):
             raise HTTPException(409, "material sync is not set up for this platform")
         link.sync_enabled = body.sync_enabled
-    return _out(link, platform)
+        if body.auto_add_sections is not None:
+            link.auto_add_sections = sorted(
+                {x.strip() for x in body.auto_add_sections if x.strip()}
+            )
+        sections = _sections(s, link.id)
+    return _out(link, platform, sections)
 
 
 @router.post("/{kb_id}/lms/{link_id}/sync", status_code=202)
@@ -94,3 +104,7 @@ def sync_now(kb_id: uuid.UUID, link_id: uuid.UUID, teacher: TeacherDep) -> dict:
             raise HTTPException(409, "material sync is not set up for this platform")
     queued = enqueue_sync(link_id, kb_id)
     return {"queued": queued is not None}
+
+
+def _sections(s: Session, link_id: uuid.UUID) -> list[str]:
+    return sorted(set(s.scalars(select(LmsFile.section).where(LmsFile.map_id == link_id))) - {""})

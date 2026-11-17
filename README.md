@@ -212,6 +212,11 @@ review, when Moodle files were removed, when a student's question comes to them,
 assistant settings pass or fail their check. Students see when a teacher has answered their
 question. CMP sends no e-mail: it keeps no e-mail addresses.
 
+**Also (2026-11-18):** CMP can open inside the Moodle page itself; a teacher can choose Moodle
+sections whose new files go live straight away (everything else still waits for review); chat
+history and handled questions are deleted after 180 days (configurable); and whoever runs the
+installation can register learning platforms on an admin page instead of the command line.
+
 **Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
 Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question

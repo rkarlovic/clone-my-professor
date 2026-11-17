@@ -1,4 +1,5 @@
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { AdminPage } from "./pages/AdminPage";
 import { ChatPage } from "./pages/ChatPage";
 import { CoursePage } from "./pages/CoursePage";
 import { HomePage } from "./pages/HomePage";
@@ -16,6 +17,8 @@ function Page({ route }: { route: Route }) {
       return <ChatPage kbId={route.kbId} />;
     case "lti":
       return <LtiPage query={route.query} />;
+    case "admin":
+      return <AdminPage />;
     default:
       return <HomePage />;
   }

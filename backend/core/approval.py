@@ -129,7 +129,8 @@ def discard_version(session: Session, version: KbVersion) -> None:
 
 
 def auto_publish(session: Session, version: KbVersion) -> None:
-    """Publish a processed version marked `auto_activate` (an LMS removal) without the teacher."""
+    """Publish a processed version marked `auto_activate` without the teacher: an LMS removal,
+    or new files from sections the teacher chose to auto-add (their approval in advance)."""
     if not version.auto_activate or version.ingest_status != IngestStatus.ready:
         return
     if version.status == KbVersionStatus.draft:

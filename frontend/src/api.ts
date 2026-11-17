@@ -249,15 +249,17 @@ export interface LmsLink {
   sync_enabled: boolean;
   last_sync_at: string | null;
   last_sync_status: string | null;
-  last_sync_report: { removed_files?: string[]; new_files?: string[]; removal_skipped?: string } | null;
+  last_sync_report: { removed_files?: string[]; new_files?: string[]; removal_skipped?: string; published?: boolean } | null;
+  auto_add_sections: string[];
+  sections: string[];
 }
 
 export const lmsApi = {
   links: (kb: string) => request<LmsLink[]>("teacher", `/api/courses/${kb}/lms`),
-  settings: (kb: string, id: string, sync_enabled: boolean) =>
+  settings: (kb: string, id: string, sync_enabled: boolean, auto_add_sections?: string[]) =>
     request<LmsLink>("teacher", `/api/courses/${kb}/lms/${id}`, {
       method: "PUT",
-      body: json({ sync_enabled }),
+      body: json({ sync_enabled, auto_add_sections }),
     }),
   syncNow: (kb: string, id: string) =>
     request<{ queued: boolean }>("teacher", `/api/courses/${kb}/lms/${id}/sync`, { method: "POST" }),
@@ -279,6 +281,56 @@ export const notificationApi = {
     request<{ read: number }>("teacher", "/api/notifications/read", { method: "POST", body: json({ ids }) }),
   readAll: () =>
     request<{ read: number }>("teacher", "/api/notifications/read", { method: "POST", body: json({ all: true }) }),
+};
+
+export interface PlatformIn {
+  name: string;
+  issuer: string;
+  client_id: string;
+  auth_login_url: string;
+  jwks_url: string;
+  deployment_ids: string[];
+  ws_base_url: string | null;
+  ws_token_env: string | null;
+}
+
+export interface Platform extends PlatformIn {
+  id: string;
+  ws_token_set: boolean;
+}
+
+const ADMIN_KEY = "cmp.admin.token";
+
+async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  headers.set("X-CMP-Admin-Token", adminApi.token());
+  if (init.body) headers.set("Content-Type", "application/json");
+  const r = await fetch(path, { ...init, headers });
+  if (!r.ok) throw new ApiError(r.status, await errorText(r));
+  return (await r.json()) as T;
+}
+
+export const adminApi = {
+  token: (): string => {
+    try {
+      return sessionStorage.getItem(ADMIN_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  },
+  setToken: (t: string) => {
+    try {
+      sessionStorage.setItem(ADMIN_KEY, t);
+    } catch {
+      /* blocked storage: this tab cannot keep it */
+    }
+  },
+  tool: () => adminRequest<Record<string, string>>("/api/admin/tool"),
+  platforms: () => adminRequest<Platform[]>("/api/admin/platforms"),
+  register: (body: PlatformIn) =>
+    adminRequest<Platform>("/api/admin/platforms", { method: "POST", body: json(body) }),
+  change: (id: string, body: PlatformIn) =>
+    adminRequest<Platform>(`/api/admin/platforms/${id}`, { method: "PUT", body: json(body) }),
 };
 
 export interface LinkInfo {

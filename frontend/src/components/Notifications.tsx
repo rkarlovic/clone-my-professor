@@ -13,6 +13,8 @@ export function noticeText(n: Notice): string {
       return `Obrada verzije ${v} nije uspjela.`;
     case "lms_removed":
       return `Iz objavljene verzije uklonjeno jer više nije u sustavu za učenje: ${((d.files as string[]) ?? []).join(", ")}.`;
+    case "lms_added":
+      return `Objavljeno automatski iz odabranih cjelina sustava za učenje: ${((d.files as string[]) ?? []).join(", ")}.`;
     case "question":
       return `Novo pitanje studenta: „${d.question as string}”`;
     case "persona_active":

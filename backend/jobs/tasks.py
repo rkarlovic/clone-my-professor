@@ -142,9 +142,21 @@ def _notify_version(version_id: uuid.UUID, failed: bool = False) -> None:
         v = s.get(KbVersion, version_id)
         kb_id, data = v.kb_id, {"version": v.version, "origin": v.origin}
         auto, removed = v.auto_activate, list(v.removed_files or [])
+        added = [f["file_name"] for f in v.pending_files]
     if failed:
         notify_teachers_safely(kb_id, "draft_failed", data)
-    elif auto:
+    elif auto and removed:
         notify_teachers_safely(kb_id, "lms_removed", data | {"files": removed})
+    elif auto:
+        notify_teachers_safely(kb_id, "lms_added", data | {"files": added})
     else:
         notify_teachers_safely(kb_id, "draft_ready", data)
+
+
+@app.periodic(cron="17 3 * * *")
+@app.task(name="retention", queue=INGEST_QUEUE, pass_context=False)
+def retention(timestamp: int) -> None:
+    """Daily at 03:17: delete personal data past its retention (core.retention, rule 9)."""
+    from core.retention import purge
+
+    purge()
