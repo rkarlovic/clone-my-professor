@@ -149,8 +149,13 @@ about points went straight to the teacher, a question the slides answer got a co
 answer citing slide 16 after 82 seconds on this laptop, and a question about Vygotsky (not
 in the material) went to the teacher. There is no chat page yet.
 
-**Next:** in step 3, the teacher's question queue (answering forwarded questions), the
-automatic test questions after each upload, the web pages for chat and teachers, and the
+**Step 3, fourth piece (2026-11-17): the teacher's question queue.** The teacher sees the
+questions the clone passed on, with the reason in plain words, but not who asked. They can
+answer (optionally pointing to the file and slide) or dismiss a question that needs no
+answer. The student finds the teacher's answer under their question in the chat history.
+Answers that point to a slide later become test questions for the course, at no extra work.
+
+**Next:** in step 3, the automatic test questions after each upload, the web pages for chat and teachers, and the
 teacher's settings. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
@@ -178,6 +183,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
+| Question queue (step 3) | Teacher API: forwarded questions with the reason, answer with optional sources (checked against the course's files) or dismiss; no student identity shown; the student sees the teacher's answer in their history |
 | Student chat (step 3) | Chat API: answers from the live version only, server-sent progress then the checked answer with citations, AI notice first, forwarded questions to the teacher queue, own history, 👍/👎 |
 | Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |

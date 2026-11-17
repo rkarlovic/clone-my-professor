@@ -35,7 +35,7 @@ from core.chat import (
     set_feedback,
 )
 from core.db import app_engine
-from core.models import ChatMessage
+from core.models import ChatMessage, TeacherQuestion, TeacherQuestionStatus
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -68,13 +68,18 @@ class MessageOut(BaseModel):
     forwarded: bool  # True: the question went to the teacher instead of being answered
     feedback: int | None
     created_at: datetime
+    # The teacher's own answer to a forwarded question, once given (written by a person, not
+    # the AI: the UI shows it as the teacher's).
+    teacher_answer: str | None = None
+    teacher_answered_at: datetime | None = None
 
 
 class FeedbackIn(BaseModel):
     helpful: bool
 
 
-def _out(m: ChatMessage) -> MessageOut:
+def _out(m: ChatMessage, teacher: TeacherQuestion | None = None) -> MessageOut:
+    answered = teacher is not None and teacher.status == TeacherQuestionStatus.answered
     return MessageOut(
         id=m.id,
         question=m.question,
@@ -83,6 +88,8 @@ def _out(m: ChatMessage) -> MessageOut:
         forwarded=m.forwarded is not None,
         feedback=m.feedback,
         created_at=m.created_at,
+        teacher_answer=teacher.answer if answered else None,
+        teacher_answered_at=teacher.answered_at if answered else None,
     )
 
 
@@ -109,7 +116,10 @@ def course_info(kb_id: uuid.UUID, student: StudentDep) -> CourseInfo:
 def my_messages(kb_id: uuid.UUID, student: StudentDep) -> list[MessageOut]:
     _live_course(kb_id)
     with Session(app_engine()) as s:
-        return [_out(m) for m in history(s, kb_id, student)]
+        messages = history(s, kb_id, student)
+        ids = [m.teacher_question_id for m in messages if m.teacher_question_id]
+        answers = {q.id: q for q in s.query(TeacherQuestion).filter(TeacherQuestion.id.in_(ids))}
+        return [_out(m, answers.get(m.teacher_question_id)) for m in messages]
 
 
 @router.post("/{kb_id}/messages")

@@ -871,6 +871,28 @@ Decisions made in step 1:
 - Not yet: the chat page (frontend), the teacher's view of the queue, LTI, retention
   rules for `chat_message`, conversation memory, rate limits per student.
 
+**Step 3, part 4: the teacher's question queue (2026-11-17).**
+- `core/queue.py`: `list_questions` (by status), `answer_forwarded` (answer or correct an
+  earlier answer; optional sources `[{file_name, page}]`, checked against the files of the
+  version the student asked and of the active version), `dismiss_forwarded` (open questions
+  only). Migration `0010`: `teacher_question.answer_sources`, `answered_by`.
+- API (`app/questions.py`): `GET /api/courses/{kb_id}/questions[?status=open|answered|
+  dismissed|all]` (default open; each item has the forward reason as a code and in words),
+  `POST …/questions/{id}/answer`, `POST …/questions/{id}/dismiss`; only the course's teacher
+  (404 otherwise). **No student identity is returned** (rule 9).
+- The student's chat history shows the teacher's answer under the forwarded question
+  (`teacher_answer`, `teacher_answered_at`; the UI must show it as the teacher's, not the AI's).
+  Nothing is pushed to the student yet (no LTI / notifications).
+- A teacher answer with a source is a question + source pair: the start of the collected
+  real-question set (CLAUDE.md "Evaluation strategy"). Turning those into an eval set is not
+  built yet.
+- Test (`tests/test_questions.py`): list in order with reasons and no student field, unknown
+  source file refused, other teachers 404, answer with source, dismiss only when open, status
+  filter, the student sees the teacher's answer and nothing for a dismissed question. Runs the
+  real app and database (the model is not involved in the queue).
+- Not yet: notifications (teacher: new questions; student: answered), grouping similar
+  questions, turning answered questions into the collected eval set, the dashboard page.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the

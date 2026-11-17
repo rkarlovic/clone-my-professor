@@ -153,6 +153,9 @@ class TeacherQuestion(Base):
     answer: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
+    # [{"file_name", "page"}] the teacher pointed to: question + source for the collected set
+    answer_sources: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default="[]")
 
 
 class ChatMessage(Base):
