@@ -26,6 +26,7 @@ from core.checks import valid_questions
 from core.checkset import GENERIC_ABSTAIN
 from core.db import app_engine, kb_scope
 from core.models import Document, KnowledgeBase, PersonaConfig
+from core.notify import notify_teachers
 from core.settings import get_settings
 from llm.prompts import DONT_KNOW
 
@@ -251,9 +252,12 @@ def _finish(persona_id: uuid.UUID, report: dict) -> None:
             select(KnowledgeBase.id).where(KnowledgeBase.id == persona.kb_id).with_for_update()
         )
         persona.check_report = report
+        data = {"version": persona.version, "reasons": report.get("reasons", [])}
         if not report.get("passed"):
             persona.status = "rejected"
+            notify_teachers(s, persona.kb_id, "persona_rejected", data)
             return
+        notify_teachers(s, persona.kb_id, "persona_active", data)
         current = active_persona(s, persona.kb_id)
         if current is not None and current.id != persona.id:
             current.status = "retired"

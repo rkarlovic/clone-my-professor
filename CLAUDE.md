@@ -1158,6 +1158,25 @@ LMS leaves the live version **at once**, without the teacher's approval (rule 5 
   may read its versions.
 - Not yet: removing a teacher from a course, adding one without an LMS (dev or SSO).
 
+**Step 4, part 5: in-app notifications (2026-11-18).**
+- `notification` (migration `0017`): one row per recipient, a teacher (`teacher_id`) or a
+  student of a course (`student_ref`, opaque; rule 9); `kind`, `data`, `read_at`. **No e-mail**:
+  CMP stores no e-mail addresses (and needs no mail server).
+- `core/notify.py`; events: `draft_ready` / `draft_failed` (ingest job), `lms_removed` (an
+  automatic LMS removal published), `question` (forwarded, in the chat transaction),
+  `persona_active` / `persona_rejected` (persona check) → every teacher of the course;
+  `answered` → the student who asked (found through the stored exchange). Notifying never
+  breaks the work it reports on.
+- API (`app/notifications.py`): `GET /api/notifications[?unread=true]`,
+  `POST /api/notifications/read` (`ids` or `all`); students `GET/POST
+  /api/chat/{kb_id}/notifications[/read]`. Each reader can mark only their own.
+- Pages: "Obavijesti (N)" on "Moji kolegiji" (worded per kind, link to the course, "Označi sve
+  pročitanim"), "N nove obavijesti" per course; the chat shows "Nastavnik je odgovorio …" once
+  and marks it read. A failing notification request never blocks the chat.
+- Tests: backend 1 (forwarded question → the teacher; the answer → only the student who asked;
+  read marking limited to the reader), frontend 1 (notice wording). Not checked in a browser.
+- Not yet: e-mail or LMS messages (would need addresses or the LMS messaging API).
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the

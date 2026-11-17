@@ -207,6 +207,11 @@ students get after the next check, and the previous version stayed available.
 **Several teachers (2026-11-18).** A course can have more than one teacher. Every teacher of
 the Moodle course who opens CMP joins the linked course automatically and can manage it.
 
+**Notifications (2026-11-18).** Teachers see notices in CMP when a new version waits for
+review, when Moodle files were removed, when a student's question comes to them, and when new
+assistant settings pass or fail their check. Students see when a teacher has answered their
+question. CMP sends no e-mail: it keeps no e-mail addresses.
+
 **Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
 Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question

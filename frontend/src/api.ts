@@ -263,6 +263,24 @@ export const lmsApi = {
     request<{ queued: boolean }>("teacher", `/api/courses/${kb}/lms/${id}/sync`, { method: "POST" }),
 };
 
+export interface Notice {
+  id: string;
+  kb_id: string;
+  course: string | null;
+  kind: string;
+  data: Record<string, unknown>;
+  created_at: string;
+  read: boolean;
+}
+
+export const notificationApi = {
+  list: (unread = false) => request<Notice[]>("teacher", `/api/notifications${unread ? "?unread=true" : ""}`),
+  read: (ids: string[]) =>
+    request<{ read: number }>("teacher", "/api/notifications/read", { method: "POST", body: json({ ids }) }),
+  readAll: () =>
+    request<{ read: number }>("teacher", "/api/notifications/read", { method: "POST", body: json({ all: true }) }),
+};
+
 export interface LinkInfo {
   context_title: string | null;
   courses: { id: string; subject_name: string }[];
@@ -282,6 +300,12 @@ export const ltiApi = {
 export const studentApi = {
   course: (kb: string) => request<ChatCourse>("student", `/api/chat/${kb}`),
   history: (kb: string) => request<Message[]>("student", `/api/chat/${kb}/messages`),
+  notifications: (kb: string) => request<Notice[]>("student", `/api/chat/${kb}/notifications`),
+  readNotifications: (kb: string) =>
+    request<{ read: number }>("student", `/api/chat/${kb}/notifications/read`, {
+      method: "POST",
+      body: json({ all: true }),
+    }),
   feedback: (id: string, helpful: boolean) =>
     request<Message>("student", `/api/chat/messages/${id}/feedback`, {
       method: "POST",

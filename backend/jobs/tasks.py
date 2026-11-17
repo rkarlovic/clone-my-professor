@@ -14,8 +14,13 @@ def ingest_version(kb_version_id: str) -> None:
     `failed` with the error; the teacher can retry, which queues this job again."""
     from ingestion.pipeline import process_version  # heavy imports (Docling) only in workers
 
-    report = process_version(uuid.UUID(kb_version_id))
+    try:
+        report = process_version(uuid.UUID(kb_version_id))
+    except Exception:
+        _notify_version(uuid.UUID(kb_version_id), failed=True)
+        raise
     _auto_publish(uuid.UUID(kb_version_id))
+    _notify_version(uuid.UUID(kb_version_id))
     _queue_checks(uuid.UUID(kb_version_id))
     if report:
         log.info(
@@ -123,3 +128,23 @@ def _auto_publish(version_id: uuid.UUID) -> None:
 
     with Session(app_engine()) as s, s.begin():
         auto_publish(s, s.get(KbVersion, version_id))
+
+
+def _notify_version(version_id: uuid.UUID, failed: bool = False) -> None:
+    """Tell the course's teachers: a draft to review, a failure, or an automatic LMS removal."""
+    from sqlalchemy.orm import Session
+
+    from core.db import app_engine
+    from core.models import KbVersion
+    from core.notify import notify_teachers_safely
+
+    with Session(app_engine()) as s:
+        v = s.get(KbVersion, version_id)
+        kb_id, data = v.kb_id, {"version": v.version, "origin": v.origin}
+        auto, removed = v.auto_activate, list(v.removed_files or [])
+    if failed:
+        notify_teachers_safely(kb_id, "draft_failed", data)
+    elif auto:
+        notify_teachers_safely(kb_id, "lms_removed", data | {"files": removed})
+    else:
+        notify_teachers_safely(kb_id, "draft_ready", data)

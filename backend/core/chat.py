@@ -17,6 +17,7 @@ from core.answer import Answer, answer_question
 from core.approval import active_version
 from core.db import app_engine
 from core.models import ChatMessage, KnowledgeBase
+from core.notify import notify_teachers
 from core.persona import active_persona, persona_text
 from core.queue import forward_to_teacher
 
@@ -81,6 +82,9 @@ def ask(
         if answer.forwarded:
             queued = forward_to_teacher(
                 s, course.version_id, question, answer.forwarded, student_ref
+            )
+            notify_teachers(
+                s, kb_id, "question", {"question": question[:200], "reason": answer.forwarded.value}
             )
         message = ChatMessage(
             kb_id=kb_id,

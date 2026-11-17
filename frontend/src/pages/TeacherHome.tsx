@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, teacherApi, type Course } from "../api";
+import { ApiError, teacherApi, type Course, type Notice } from "../api";
 import { DevSignIn } from "../components/DevSignIn";
+import { TeacherNotifications } from "../components/Notifications";
 import { isSignedIn } from "../identity";
 import { href } from "../router";
 
@@ -9,6 +10,7 @@ export function TeacherHome() {
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [unread, setUnread] = useState<Notice[]>([]);
 
   const load = useCallback(() => {
     if (!isSignedIn("teacher")) return;
@@ -42,6 +44,7 @@ export function TeacherHome() {
       ) : (
         <>
           {error && <p className="error">{error}</p>}
+          <TeacherNotifications onChange={setUnread} />
           {courses === null ? (
             <p className="muted">Učitavam…</p>
           ) : courses.length === 0 ? (
@@ -55,6 +58,11 @@ export function TeacherHome() {
                     <span className="badge ok">objavljena verzija {c.active_version}</span>
                   ) : (
                     <span className="badge">nije objavljen</span>
+                  )}
+                  {unread.some((n) => n.kb_id === c.id) && (
+                    <span className="badge bad">
+                      {unread.filter((n) => n.kb_id === c.id).length} nove obavijesti
+                    </span>
                   )}
                   {(c.teachers ?? 1) > 1 && (
                     <span className="badge">{c.teachers} nastavnika</span>

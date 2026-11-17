@@ -293,3 +293,17 @@ class CourseTeacher(Base):
     role: Mapped[str] = mapped_column(String(20), default="teacher")  # owner | teacher
     added_via: Mapped[str] = mapped_column(String(20), default="owner")  # owner | lti
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Notification(Base):
+    """An in-app notice for one teacher or one student (opaque ref) of a course."""
+
+    __tablename__ = "notification"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    teacher_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
+    student_ref: Mapped[str | None] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(40))
+    data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

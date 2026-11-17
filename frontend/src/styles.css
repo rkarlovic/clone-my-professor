@@ -160,3 +160,5 @@ label.inline { flex-direction: row; align-items: center; gap: 6px; }
 .tabs { flex-wrap: wrap; }
 .lms-link { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
 .lms-link:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+.notices ul { padding-left: 1.2rem; margin: 4px 0; }
+.notices li { margin: 4px 0; }

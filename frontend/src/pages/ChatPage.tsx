@@ -19,6 +19,7 @@ export function ChatPage({ kbId }: { kbId: string }) {
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState<{ question: string; stage: string } | null>(null);
   const [error, setError] = useState("");
+  const [answered, setAnswered] = useState(0); // teacher answers since the last visit
   const end = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -26,7 +27,13 @@ export function ChatPage({ kbId }: { kbId: string }) {
     try {
       const c = await studentApi.course(kbId);
       setCourse(c);
-      if (c.live) setMessages(await studentApi.history(kbId));
+      if (c.live) {
+        setMessages(await studentApi.history(kbId));
+        const notes = await studentApi.notifications(kbId).catch(() => []); // never blocks the chat
+        const n = notes.filter((x) => x.kind === "answered").length;
+        setAnswered(n);
+        if (notes.length > 0) studentApi.readNotifications(kbId).catch(() => {});
+      }
       setError("");
     } catch (e) {
       setError(e instanceof ApiError && e.status === 404 ? "Kolegij ne postoji." : (e as Error).message);
@@ -96,6 +103,12 @@ export function ChatPage({ kbId }: { kbId: string }) {
         <p className="page card">Nastavnik još nije objavio ovaj kolegij. Pokušajte kasnije.</p>
       ) : (
         <>
+          {answered > 0 && (
+            <p className="page card ok" role="status">
+              Nastavnik je odgovorio na {answered === 1 ? "vaše pitanje" : `${answered} vaša pitanja`}:
+              odgovor je ispod pitanja, označen „Odgovor nastavnika”.
+            </p>
+          )}
           <section className="messages" aria-live="polite">
             {messages.length === 0 && !pending && (
               <p className="muted center">

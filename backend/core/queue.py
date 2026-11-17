@@ -106,6 +106,17 @@ def answer_forwarded(
     item.answer_sources = [{"file_name": s.file_name, "page": s.page} for s in sources]
     item.status = TeacherQuestionStatus.answered
     item.answered_at, item.answered_by = datetime.now(UTC), teacher_id
+    # the student who asked sees it in the chat (by the stored exchange, not by identity)
+    from core.models import ChatMessage
+    from core.notify import notify_student
+
+    asked = session.scalars(
+        select(ChatMessage).where(ChatMessage.teacher_question_id == item.id)
+    ).first()
+    if asked is not None:
+        notify_student(
+            session, item.kb_id, asked.student_ref, "answered", {"message_id": str(asked.id)}
+        )
     session.flush()
     return item
 
