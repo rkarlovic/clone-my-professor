@@ -636,7 +636,30 @@ Decisions made in step 1:
     counts as a miss, so check-set recall understates retrieval somewhat.
   - Generic questions' dense top scores 0.31–0.61 overlap the lowest answerable 0.48: again,
     a score floor alone cannot decide abstention.
-  - Not yet: an answer run on the check set (~2 h 40 min for 72 questions with `--judge`).
+  - **Answer run on the check set (2026-11-17)**, v3 dense k=5, `--judge`, all rules above,
+    72 questions in **9,446 s (2 h 37 min)**, no errors:
+
+    | group | answered | cites expected slide | expected slide retrieved | judge: grounded | judge: on topic |
+    |-------|----------|----------------------|--------------------------|-----------------|-----------------|
+    | check (60) | 0.95 | 0.72 | 0.82 | 0.67 | 0.97 |
+
+    - Cites-expected is lower than retrieval because of how the set is built, not mainly because
+      of errors: 10 of the 14 answered questions that miss the expected slide cite the
+      **neighbouring** slide (e.g. 199 for 200, 912 for 913), which says the same thing. Counting
+      neighbours, 0.88. When retrieval missed the slide, the answer model mostly answered from
+      the neighbours instead of forwarding (8 of 11 retrieval misses answered).
+    - Forwarded 3: c007/c053 `no_source`, c017 `failed_check`. c017 was one of the poor questions,
+      and its answer mixed in map ordering from an unrelated slide, so the check was right to stop it.
+    - Outside knowledge got past the check in c036: O(1)/O(n)/O(n²) for `ArrayList`/`LinkedList`
+      `get`, with IZVAN=DA, which does not forward. c037 is long and says "vašim izvorima" again.
+    - Generic abstain questions: **11/12 forwarded.** 5 by `ADMIN_TERMS`, g03 (signature after
+      absences) by the scope check, g07 (English exam question) labelled DRUGO and forwarded
+      `out_of_scope` after `NE_ZNAM`, and all 5 everyday off-topic questions `out_of_scope`.
+    - **g06 "jel se mora dolazit na vjezbe" was answered:** "Da, dolazak na vježbe je obavezan",
+      inferred from the timetable slide (2+1 h × 15 weeks). The scope check said GRADIVO, and
+      `ADMIN_TERMS` has no attendance words. This is a rule 2 failure (attendance is the
+      teacher's to answer), and the claim itself is not on the slide.
+    - Judge numbers are as rough as before (the 9B judge; see the judge review).
 - Timings on this CPU laptop: 9B answer 40–70 s, scope check 1–10 s, judge 10–45 s, plus ~10 s
   per call to reload the model (`keep_alive: 0`, see models.yaml); ~94 s per answered question
   in dense mode; the live check adds ~42 s. Expect ~110 min for 50 questions dense with the
@@ -655,7 +678,7 @@ Next:
    the full run); judge sample reviewed by Claude (a person confirms it); closing-sentence
    rule tried and reverted, judge prompt wording does not help (see above); the teacher's 60 questions and hybrid + rerank;
    auto-generated check sets: generator and first set done (retrieval measured, see above);
-   left: an answer run on it, hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
+   answer run on it done (abstain 11/12: attendance question g06 answered); left: hooking it into ingest (step 3), teacher deletion in the UI. Part B (model choice) needs the vLLM/GPU setup.
 4. Later, before the pilot and before a model choice is final: teacher reviews the golden set
    (`expected_sources` first, then reference answers, the `[review 2026-11-13]` notes, slides
    313/365 and the h24/h25 forward-or-answer decision); then re-run the evaluations.

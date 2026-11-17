@@ -47,6 +47,11 @@ used with permission and never stored in this repository. Two question sets:
   teachers never have to write test questions. Search finds the right slide for 82–92 % of them
   (depending on the search mode), about the same as for the hand-written student-like
   questions, which suggests they are realistic; about 5 of the 60 were poorly worded.
+  When it answered them, the clone gave 57 of 60 an answer; most of those cite the right
+  slide or the one next to it. It forwarded 11 of the 12 questions it must not answer. The one it
+  missed: "do I have to come to the exercises?" got the answer "yes, attendance is required",
+  guessed from the timetable slide. Questions about attendance must go to the teacher; this
+  is the next fix.
 
 **Latest results** (2026-11-15):
 
