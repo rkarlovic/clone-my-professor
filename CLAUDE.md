@@ -1071,6 +1071,51 @@ sign-in (see "Not yet" lists above).
   launch in an iframe (tested in the replace-window mode), deep linking, a dynamic-registration
   flow and an admin page for platforms.
 
+**Step 4, part 2: Moodle material sync (2026-11-17).**
+- `connectors/base.py` (`Material`, `Connector`: list a course's materials, download one) and
+  `connectors/moodle/client.py` (Web Services REST: `core_course_get_contents`, files from
+  `webservice/pluginfile.php` with the token). Only what students see: hidden sections and
+  modules skipped, only supported file types; the token is sent only to the platform's own
+  origin (a file URL elsewhere is refused) and never appears in `Material`'s repr.
+- `core/sync.py` `sync_course(link)` (platform-independent): each visible file gets a content
+  hash, reused when name, size and modification time match the last sync (`lms_file`),
+  otherwise downloaded into the content-addressed store; files whose content is not in the
+  course yet become a **draft** version with `origin = "lms"` (documents `source_platform =
+  "lms"`) through `create_upload_version`, queued for the same ingest job. Report statuses:
+  new_version | unchanged | busy (an earlier version still processing: next time) |
+  not_configured | failed; files gone from the LMS are listed (`missing_in_lms`), not removed
+  (versions cannot drop files yet). A name used twice gets " (2)".
+- Jobs: `sync_course` (per-course lock, one waiting per link) and the periodic `poll_lms`
+  (Procrastinate cron `*/20 * * * *`) queueing every link with `sync_enabled`.
+- Secrets: the platform row stores `ws_base_url` and the **name** of the env var with the
+  token (`ws_token_env`, e.g. `MOODLE_WS_TOKEN` in `.env`); `scripts.lti_platform ws` sets them.
+  Migration `0014`: `lti_platform.ws_*`, `platform_context_map.sync_enabled` (off until the
+  teacher turns it on) + last sync time/status/report, `lms_file`, `kb_version.origin`.
+- API (`app/sync.py`): `GET /api/courses/{kb_id}/lms`, `PUT …/lms/{link_id}` (sync on/off;
+  409 when the platform has no Web Services), `POST …/lms/{link_id}/sync`. Page: "Sustav za
+  učenje" box on the materials tab (switch, "Provjeri sada", last result in words, files no
+  longer in the LMS); versions from the sync say "Iz sustava za učenje, novo ili promijenjeno".
+- Local Moodle: `setup_cmp.php` now also enables Web Services + REST and creates a `cmp_sync`
+  user with a system role allowing only `webservice/rest:use`, `moodle/course:view`,
+  `moodle/course:viewparticipants`, a restricted service "CMP sync" with the one function and
+  file downloads, and a token (written to `.env` as `MOODLE_WS_TOKEN`, never printed).
+  `infra/moodle/add_file.php` adds a file resource (optionally hidden) for tests.
+- Tests (`tests/test_sync.py`, 4, fake connector): first sync → draft with both files; while
+  it is queued → busy; after processing → unchanged with no download; one changed file →
+  only it downloaded and a new draft; no Web Services → not_configured; duplicate names; the
+  Moodle client's parsing (hidden section/module, unsupported type, non-file content
+  skipped; token not in repr; a foreign download URL refused). Frontend: 19 tests unchanged.
+- **Live (local Moodle)**: two visible lectures and one hidden lecture added to the Moodle
+  course; the teacher turned sync on and pressed "Provjeri sada" → version 2 draft "from the
+  learning system" with exactly the two visible lectures (the hidden one never left Moodle),
+  version 1 stayed live; processed and checked; a second "Provjeri sada" → "nema novih ni
+  promijenjenih datoteka", 2 files seen, 0 downloaded. The worker registered the 20-minute poll
+  and ran it.
+- Not yet: removing files that disappeared from the LMS (needs dropping files from a
+  version), the "auto-add from selected sections" rule, notifications to the teacher about a
+  new draft (it shows on the course page), folders' nested files beyond what
+  `core_course_get_contents` returns, SRCE/Merlin (needs their approval and a token).
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -1179,6 +1224,13 @@ cd backend && uv run python -m scripts.lti_platform add --name "Moodle (dev)" --
     --client-id <client_id> --auth-url http://127.0.0.1:8080/mod/lti/auth.php \
     --jwks-url http://127.0.0.1:8080/mod/lti/certs.php --deployment-id <deployment_id>
 #   then http://127.0.0.1:8080 as teacher1 / student1 and open "Asistent (CMP)" in the course
+#   setup_cmp.php also prints ws_token (material sync): put it in .env as MOODLE_WS_TOKEN
+#   (never in a file in git), then:
+cd backend && uv run python -m scripts.lti_platform ws --issuer http://127.0.0.1:8080 \
+    --base-url http://127.0.0.1:8080 --token-env MOODLE_WS_TOKEN
+#   add a test file to the Moodle course (docker cp it into the container first):
+MSYS_NO_PATHCONV=1 docker compose -f infra/docker-compose.dev.yml --env-file .env --profile moodle \
+    exec -u www-data moodle php /opt/cmp/add_file.php DAROV-DEMO /tmp/<file> [hidden]
 ```
 
 Planned (later build steps):

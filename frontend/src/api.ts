@@ -29,6 +29,7 @@ export interface Version {
   approved_at: string | null;
   activated_at: string | null;
   check_status: "queued" | "running" | "done" | "failed" | null;
+  origin?: "upload" | "lms";
   check: CheckReport | null;
   summary: VersionSummary | null;
   documents: { file_name: string; file_hash: string }[] | null;
@@ -229,6 +230,28 @@ export const personaApi = {
     request<Persona>("teacher", `/api/courses/${kb}/persona/${n}/activate`, { method: "POST" }),
   preview: (kb: string, n: number, question: string, onEvent: (e: SseEvent) => void) =>
     streamPost("teacher", `/api/courses/${kb}/persona/${n}/preview`, { question }, onEvent),
+};
+
+export interface LmsLink {
+  id: string;
+  platform: string;
+  context_title: string | null;
+  sync_available: boolean;
+  sync_enabled: boolean;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_sync_report: { missing_in_lms?: string[]; new_files?: string[] } | null;
+}
+
+export const lmsApi = {
+  links: (kb: string) => request<LmsLink[]>("teacher", `/api/courses/${kb}/lms`),
+  settings: (kb: string, id: string, sync_enabled: boolean) =>
+    request<LmsLink>("teacher", `/api/courses/${kb}/lms/${id}`, {
+      method: "PUT",
+      body: json({ sync_enabled }),
+    }),
+  syncNow: (kb: string, id: string) =>
+    request<{ queued: boolean }>("teacher", `/api/courses/${kb}/lms/${id}/sync`, { method: "POST" }),
 };
 
 export interface LinkInfo {

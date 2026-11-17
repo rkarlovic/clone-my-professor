@@ -84,7 +84,7 @@ def base_version(session: Session, kb_id: uuid.UUID) -> KbVersion | None:
 
 
 def create_upload_version(
-    session: Session, kb: KnowledgeBase, files: Sequence[StoredFile]
+    session: Session, kb: KnowledgeBase, files: Sequence[StoredFile], origin: str = "upload"
 ) -> KbVersion:
     """A new draft version = the base version's documents + the uploaded files. A file whose
     name and content are already in the base is not processed again; a file with an existing
@@ -111,8 +111,10 @@ def create_upload_version(
     version = create_draft_version(session, kb.id)
     version.base_version_id = base.id if base else None
     version.ingest_status = IngestStatus.queued
+    version.origin = origin
     version.pending_files = [
-        {"file_name": f.file_name, "file_hash": f.file_hash, "path": str(f.path)} for f in pending
+        {"file_name": f.file_name, "file_hash": f.file_hash, "path": str(f.path), "source": origin}
+        for f in pending
     ]
     session.flush()
     return version

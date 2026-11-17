@@ -2,6 +2,8 @@
 
     uv run python -m scripts.lti_platform config          # the URLs to enter in the LMS
     uv run python -m scripts.lti_platform list
+    uv run python -m scripts.lti_platform ws --issuer http://127.0.0.1:8080 \
+        --base-url http://127.0.0.1:8080 --token-env MOODLE_WS_TOKEN   # material sync
     uv run python -m scripts.lti_platform add --name "Moodle (dev)" \
         --issuer http://127.0.0.1:8080 --client-id <from the LMS> \
         --auth-url http://127.0.0.1:8080/mod/lti/auth.php \
@@ -36,12 +38,21 @@ def main() -> None:
     add.add_argument("--auth-url", required=True)
     add.add_argument("--jwks-url", required=True)
     add.add_argument("--deployment-id", action="append", default=[])
+    ws = sub.add_parser("ws", help="set the Web Services address and the env var with the token")
+    ws.add_argument("--issuer", required=True)
+    ws.add_argument("--base-url", required=True)
+    ws.add_argument("--token-env", required=True, help="NAME of the variable, never the token")
     args = ap.parse_args()
 
     if args.cmd == "config":
         print(json.dumps(tool_urls(), indent=2))
         return
     with Session(app_engine()) as s, s.begin():
+        if args.cmd == "ws":
+            for p in s.scalars(select(LtiPlatform).where(LtiPlatform.issuer == args.issuer)):
+                p.ws_base_url, p.ws_token_env = args.base_url, args.token_env
+                print(f"{p.name}: sync via {args.base_url}, token from ${args.token_env}")
+            return
         if args.cmd == "list":
             for p in s.scalars(select(LtiPlatform)):
                 print(f"{p.name}: {p.issuer} client {p.client_id} deployments {p.deployment_ids}")

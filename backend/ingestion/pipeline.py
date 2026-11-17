@@ -147,6 +147,7 @@ def ingest_document(
     count_tokens: Callable[[str], int],
     solution: bool = False,
     modified_at: datetime | None = None,
+    source_platform: str = "upload",
 ) -> None:
     """Parse, chunk, embed and store one file as a document of `version_id`.
     `file_name` is the name students see in citations; `path` is where the bytes are."""
@@ -181,7 +182,7 @@ def ingest_document(
     with kb_scope(version_id) as s:
         document = Document(
             kb_version_id=version_id,
-            source_platform="upload",
+            source_platform=source_platform,
             file_name=file_name,
             file_hash=file_sha256(path),
             modified_at=modified_at or datetime.fromtimestamp(path.stat().st_mtime, UTC),
@@ -385,6 +386,7 @@ def process_version(
                     cache_dir=cache_dir,
                     count_tokens=count_tokens,
                     modified_at=datetime.now(UTC),
+                    source_platform=f.get("source", "upload"),
                 )
             except Exception as exc:
                 raise FileFailed(f["file_name"], exc) from exc

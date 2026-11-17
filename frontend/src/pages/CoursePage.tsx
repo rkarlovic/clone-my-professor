@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { teacherApi, type Course, type Version } from "../api";
 import { CheckQuestions } from "../components/CheckQuestions";
+import { LmsLinks } from "../components/LmsLinks";
 import { PersonaPanel } from "../components/PersonaSettings";
 import { QuestionQueue } from "../components/QuestionQueue";
 import { UploadBox } from "../components/UploadBox";
@@ -92,6 +93,7 @@ export function CoursePage({ kbId }: { kbId: string }) {
 
       {tab === "materials" ? (
         <>
+          <LmsLinks kbId={kbId} onSynced={load} />
           <UploadBox kbId={kbId} disabled={busy} onUploaded={load} />
           <h2>Verzije</h2>
           {versions.length === 0 ? (

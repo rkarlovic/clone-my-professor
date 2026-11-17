@@ -54,6 +54,7 @@ class VersionOut(BaseModel):
     ingest_error: str | None
     created_at: datetime
     pending_files: list[str]  # uploaded in this version (processed or still to process)
+    origin: str = "upload"  # upload (the teacher's) | lms (found by the material sync)
     approved_at: datetime | None = None
     activated_at: datetime | None = None
     # The background check: queued | running | done | failed (None: not run); its result
@@ -94,6 +95,7 @@ def _out(v: KbVersion, documents: list[DocumentOut] | None = None) -> VersionOut
         ingest_error=v.ingest_error,
         created_at=v.created_at,
         pending_files=[f["file_name"] for f in v.pending_files],
+        origin=v.origin,
         approved_at=v.approved_at,
         activated_at=v.activated_at,
         check_status=v.check_status,

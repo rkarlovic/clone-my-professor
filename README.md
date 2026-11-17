@@ -189,8 +189,16 @@ password. CMP keeps only an anonymous code per person, never names, e-mails or M
 user numbers. Tried with a real Moodle running locally: the teacher linked the course and
 published a lecture, the student landed in the chat and got an answer.
 
-**Next:** CMP noticing new or changed files in the Moodle course by itself (step 4), then
-the pilot server and SRCE's approval for Merlin. Fixes for the weak spots above (on both courses, answers
+**Step 4, second piece (2026-11-17): CMP keeps up with Moodle.** When the teacher turns it
+on, CMP checks the Moodle course every 20 minutes (or at once with "Provjeri sada") for new
+or changed files. It takes only what students can see; files the teacher keeps hidden stay
+in Moodle. Anything new becomes a draft for the teacher to review and publish, never live by
+itself. Unchanged files are not downloaded again. CMP reads Moodle through a separate
+account that can only look at course contents. Tried with the local Moodle: two visible
+lectures arrived as a draft, a hidden one did not, and a second check found nothing new.
+
+**Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
+Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -218,6 +226,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Question queue (step 3) | Teacher API: forwarded questions with the reason, answer with optional sources (checked against the course's files) or dismiss; no student identity shown; the student sees the teacher's answer in their history |
+| Moodle sync (step 4) | Every 20 minutes or on demand: new or changed visible files in the linked Moodle course become a draft for the teacher; hidden files are skipped; unchanged files are not downloaded again; read-only Moodle account |
 | Moodle launch (step 4) | LTI 1.3 tool: Moodle opens CMP and says who the user is; teachers link the Moodle course once, students land in its chat; only anonymous codes stored; signed sessions replace the dev sign-in outside dev mode; a local Moodle in Docker for testing |
 | Teacher's settings (step 3) | Persona: ti/Vi, answer length, help with exercises, examples, terminology, topics passed to the teacher, free text; preview; activation only after a check that forwarding and answering still work |
 | Web pages (step 3) | React + Vite: teacher pages (courses, upload, review, approve, publish, question queue) and the student chat (AI notice, progress, answer with sources, teacher answers); runs in a dev container on port 5173 |

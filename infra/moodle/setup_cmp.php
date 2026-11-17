@@ -107,7 +107,51 @@ if (!$cmid) {
     $cmid = $info->coursemodule;
 }
 
+// 5. Material sync (Web Services): a dedicated user that may only read course contents and
+//    download files, through a service with one function. Least privilege: no editing rights,
+//    no access to hidden sections (CMP takes only what students can see).
+require_once($CFG->dirroot . '/webservice/lib.php');
+set_config('enablewebservices', 1);
+$protocols = array_filter(explode(',', get_config('core', 'webserviceprotocols') ?: ''));
+if (!in_array('rest', $protocols)) {
+    $protocols[] = 'rest';
+    set_config('webserviceprotocols', implode(',', $protocols));
+}
+$syncid = cmp_user('cmp_sync', 'CMP', 'Sync', $password . 'Ws');
+$roleid = $DB->get_field('role', 'id', ['shortname' => 'cmpsync']);
+if (!$roleid) {
+    $roleid = create_role('CMP sync', 'cmpsync', 'Reads course contents for Clone My Professor');
+    set_role_contextlevels($roleid, [CONTEXT_SYSTEM]);
+}
+$system = context_system::instance();
+foreach (['webservice/rest:use', 'moodle/course:view', 'moodle/course:viewparticipants'] as $cap) {
+    assign_capability($cap, CAP_ALLOW, $roleid, $system->id, true);
+}
+role_assign($roleid, $syncid, $system->id);
+$ws = new webservice();
+$service = $DB->get_record('external_services', ['shortname' => 'cmp_sync']);
+if (!$service) {
+    $serviceid = $ws->add_external_service((object)[
+        'name' => 'CMP sync',
+        'shortname' => 'cmp_sync',
+        'enabled' => 1,
+        'restrictedusers' => 1,
+        'downloadfiles' => 1,
+        'uploadfiles' => 0,
+    ]);
+    $ws->add_external_function_to_service('core_course_get_contents', $serviceid);
+    $service = $DB->get_record('external_services', ['id' => $serviceid], '*', MUST_EXIST);
+}
+if (!$DB->record_exists('external_services_users', ['externalserviceid' => $service->id, 'userid' => $syncid])) {
+    $ws->add_ws_authorised_user((object)['externalserviceid' => $service->id, 'userid' => $syncid]);
+}
+$token = $DB->get_field('external_tokens', 'token', ['externalserviceid' => $service->id, 'userid' => $syncid]);
+if (!$token) {
+    $token = \core_external\util::generate_token(EXTERNAL_TOKEN_PERMANENT, $service, $syncid, $system);
+}
+
 echo json_encode([
+    'ws_token' => $token,  // a secret: the caller writes it to .env and does not print it
     'issuer' => $CFG->wwwroot,
     'client_id' => $type->clientid,
     'deployment_id' => (string)$type->id,

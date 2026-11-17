@@ -52,13 +52,17 @@ def platform(owner_engine: Engine, monkeypatch: pytest.MonkeyPatch):
                 text("SELECT kb_id FROM platform_context_map WHERE platform_id = :p"), {"p": pid}
             )
         ]
-        refs = "SELECT id FROM teacher WHERE external_ref IS NOT NULL AND name = 'Nastavnik (LMS)'"
+        # only what this test created: its own LMS teacher (by the hash of its test user id)
+        ref = {"r": user_ref(ISSUER, "teacher-1")}
+        mine = "SELECT id FROM teacher WHERE external_ref = :r"
         c.execute(text("DELETE FROM platform_context_map WHERE platform_id = :p"), {"p": pid})
         c.execute(text("DELETE FROM lti_login_state WHERE platform_id = :p"), {"p": pid})
+        theirs = f"SELECT id FROM knowledge_base WHERE teacher_id IN ({mine})"
+        c.execute(text(f"DELETE FROM platform_context_map WHERE kb_id IN ({theirs})"), ref)
         for kb in kbs:
             c.execute(text("DELETE FROM knowledge_base WHERE id = :k"), {"k": kb})
-        c.execute(text(f"DELETE FROM knowledge_base WHERE teacher_id IN ({refs})"))
-        c.execute(text(f"DELETE FROM teacher WHERE id IN ({refs})"))
+        c.execute(text(f"DELETE FROM knowledge_base WHERE teacher_id IN ({mine})"), ref)
+        c.execute(text(f"DELETE FROM teacher WHERE id IN ({mine})"), ref)
         c.execute(text("DELETE FROM lti_platform WHERE id = :p"), {"p": pid})
 
 

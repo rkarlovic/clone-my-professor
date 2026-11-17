@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -102,6 +102,7 @@ class KbVersion(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     approved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    origin: Mapped[str] = mapped_column(String(20), default="upload")  # upload | lms
     # Background check after processing: queued | running | done | failed (None: never run)
     check_status: Mapped[str | None] = mapped_column(String(20))
     check_report: Mapped[dict | None] = mapped_column(JSONB)
@@ -233,6 +234,9 @@ class LtiPlatform(Base):
     auth_login_url: Mapped[str] = mapped_column(String(500))
     jwks_url: Mapped[str] = mapped_column(String(500))
     deployment_ids: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    # Web Services (material sync): the base URL and the NAME of the env var with the token
+    ws_base_url: Mapped[str | None] = mapped_column(String(500))
+    ws_token_env: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -257,3 +261,21 @@ class PlatformContextMap(Base):
     context_title: Mapped[str | None] = mapped_column(String(500))
     kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sync_enabled: Mapped[bool] = mapped_column(default=False)
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_sync_status: Mapped[str | None] = mapped_column(String(20))
+    last_sync_report: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class LmsFile(Base):
+    """A file last seen in a linked LMS course, so unchanged files are not downloaded again."""
+
+    __tablename__ = "lms_file"
+    id: Mapped[uuid.UUID] = _pk()
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("platform_context_map.id"))
+    external_id: Mapped[str] = mapped_column(String(1000))
+    file_name: Mapped[str] = mapped_column(String(500))
+    filesize: Mapped[int] = mapped_column(BigInteger)
+    timemodified: Mapped[int] = mapped_column(BigInteger)
+    file_hash: Mapped[str | None] = mapped_column(String(64))
+    seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -65,7 +65,10 @@ export function VersionRow({
         <span className="muted small">{when(v.created_at)}</span>
       </div>
       {v.pending_files.length > 0 && (
-        <p className="small">Novo u ovoj verziji: {v.pending_files.join(", ")}</p>
+        <p className="small">
+          {v.origin === "lms" ? "Iz sustava za učenje, novo ili promijenjeno: " : "Novo u ovoj verziji: "}
+          {v.pending_files.join(", ")}
+        </p>
       )}
       {v.ingest_error && <p className="error">{v.ingest_error}</p>}
       {v.summary && (

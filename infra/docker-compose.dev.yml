@@ -119,6 +119,7 @@ services:
       - moodle_data:/var/www/moodledata
       - ./moodle/config.php:/var/www/html/config.php:ro
       - ./moodle/setup_cmp.php:/opt/cmp/setup_cmp.php:ro
+      - ./moodle/add_file.php:/opt/cmp/add_file.php:ro
     restart: unless-stopped
 
 volumes:

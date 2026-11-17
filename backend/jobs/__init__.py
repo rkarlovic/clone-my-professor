@@ -49,3 +49,18 @@ def enqueue_persona_check(persona_id: uuid.UUID, kb_id: uuid.UUID) -> int:
     return check_persona.configure(lock=f"kb:{kb_id}", queueing_lock=f"persona:{persona_id}").defer(
         persona_id=str(persona_id)
     )
+
+
+def enqueue_sync(map_id: uuid.UUID, kb_id: uuid.UUID) -> int | None:
+    """Queue a material sync of one linked LMS course (same per-course lock as ingest). None if
+    one is already waiting."""
+    from procrastinate.exceptions import AlreadyEnqueued
+
+    from jobs.tasks import sync_course
+
+    try:
+        return sync_course.configure(lock=f"kb:{kb_id}", queueing_lock=f"sync:{map_id}").defer(
+            map_id=str(map_id)
+        )
+    except AlreadyEnqueued:
+        return None

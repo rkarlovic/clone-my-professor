@@ -79,3 +79,34 @@ def check_persona(persona_id: str) -> None:
         report.get("check_questions"),
         report.get("seconds", 0),
     )
+
+
+@app.task(name="sync_course", queue=INGEST_QUEUE, pass_context=False)
+def sync_course(map_id: str) -> None:
+    """Look for new or changed files in a linked LMS course; changes become a draft version."""
+    from core.sync import sync_course as run
+
+    report = run(uuid.UUID(map_id))
+    log.info("sync of link %s: %s", map_id, report.get("status"))
+
+
+@app.periodic(cron="*/20 * * * *")
+@app.task(name="poll_lms", queue=INGEST_QUEUE, pass_context=False)
+def poll_lms(timestamp: int) -> None:
+    """Every 20 minutes: queue a sync for each linked course whose teacher turned sync on."""
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from core.db import app_engine
+    from core.models import PlatformContextMap
+    from jobs import enqueue_sync
+
+    with Session(app_engine()) as s:
+        links = s.execute(
+            select(PlatformContextMap.id, PlatformContextMap.kb_id).where(
+                PlatformContextMap.sync_enabled
+            )
+        ).all()
+    for map_id, kb_id in links:
+        enqueue_sync(map_id, kb_id)
+    log.info("LMS poll: %d linked course(s) queued", len(links))
