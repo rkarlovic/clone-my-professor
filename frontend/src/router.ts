@@ -7,10 +7,13 @@ export type Route =
   | { page: "home" }
   | { page: "teacher" }
   | { page: "course"; kbId: string }
-  | { page: "chat"; kbId: string };
+  | { page: "chat"; kbId: string }
+  | { page: "lti"; query: URLSearchParams };
 
 export function parseRoute(hash: string): Route {
-  const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  const [path, query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "lti") return { page: "lti", query: new URLSearchParams(query) };
   if (parts[0] === "teacher" && parts[1]) return { page: "course", kbId: parts[1] };
   if (parts[0] === "teacher") return { page: "teacher" };
   if (parts[0] === "chat" && parts[1]) return { page: "chat", kbId: parts[1] };

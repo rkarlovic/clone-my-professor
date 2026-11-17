@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, teacherApi, type Course } from "../api";
 import { DevSignIn } from "../components/DevSignIn";
-import { getIdentity } from "../identity";
+import { isSignedIn } from "../identity";
 import { href } from "../router";
 
 export function TeacherHome() {
-  const [signedIn, setSignedIn] = useState(!!getIdentity("teacher"));
+  const [signedIn, setSignedIn] = useState(isSignedIn("teacher"));
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    if (!getIdentity("teacher")) return;
+    if (!isSignedIn("teacher")) return;
     teacherApi
       .courses()
       .then(setCourses)

@@ -69,6 +69,8 @@ class Teacher(Base):
     institution_id: Mapped[str | None] = mapped_column(String(100))
     consent_voice: Mapped[bool] = mapped_column(default=False)
     consent_avatar: Mapped[bool] = mapped_column(default=False)
+    # sha256 of (LMS issuer, LMS user id) for teachers who arrive by LTI; never the id itself
+    external_ref: Mapped[str | None] = mapped_column(String(64), unique=True)
 
 
 class KnowledgeBase(Base):
@@ -218,3 +220,40 @@ class PersonaConfig(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     check_report: Mapped[dict | None] = mapped_column(JSONB)
+
+
+class LtiPlatform(Base):
+    """A registered LMS (LTI 1.3 platform): who may launch CMP, and where its keys are."""
+
+    __tablename__ = "lti_platform"
+    id: Mapped[uuid.UUID] = _pk()
+    name: Mapped[str] = mapped_column(String(200))
+    issuer: Mapped[str] = mapped_column(String(500))
+    client_id: Mapped[str] = mapped_column(String(200))
+    auth_login_url: Mapped[str] = mapped_column(String(500))
+    jwks_url: Mapped[str] = mapped_column(String(500))
+    deployment_ids: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LtiLoginState(Base):
+    """One OIDC login round trip (state + nonce); short-lived and single-use."""
+
+    __tablename__ = "lti_login_state"
+    state: Mapped[str] = mapped_column(String(100), primary_key=True)
+    nonce: Mapped[str] = mapped_column(String(100))
+    platform_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lti_platform.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class PlatformContextMap(Base):
+    """An LMS course (LTI context) linked to a CMP course; many LMS courses -> one KB."""
+
+    __tablename__ = "platform_context_map"
+    id: Mapped[uuid.UUID] = _pk()
+    platform_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lti_platform.id"))
+    context_id: Mapped[str] = mapped_column(String(300))
+    context_title: Mapped[str | None] = mapped_column(String(500))
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -29,10 +29,11 @@ Classroom) or from CMP's own web app. Content and users are primarily **Croatian
 *Plain-language summary, kept up to date. Technical detail and every measurement:
 [CLAUDE.md](CLAUDE.md), section "Current status".*
 
-**Where we are:** step 3 of 6 has started. Step 1 (finding the right slide for a question)
-is done and measured; step 2 (writing answers) works, and its remaining fixes wait for the
-pilot server and the teacher's review. Step 3 builds the product: the first piece, uploading
-course files, works (see below). Everything runs on a laptop without a
+**Where we are:** step 4 of 6. Step 1 (finding the right slide) and step 2 (writing answers)
+work; their remaining fixes wait for the pilot server and the teacher's review. Step 3, the
+product (upload, approval, chat, teacher's question queue, web pages, automatic test
+questions, teacher's settings), is done. Step 4 connects Moodle: opening CMP from a Moodle
+course works. Everything runs on a laptop without a
 graphics card, so one answer takes about two minutes; on the pilot server it will take seconds.
 
 **Test course:** *Suvremene tehnike programiranja* (Java, one 945-page PDF of lecture slides),
@@ -180,8 +181,16 @@ only if the assistant still passes on what it must not answer and still answers 
 material. Tried on the demo course: a topic set to go to the teacher was passed on, answers
 got shorter, and the check passed (all 12 "must not answer" questions passed on).
 
-**Next:** real sign-in (Microsoft/Google for teachers) and the Moodle connector (step 4),
-then the pilot server. Fixes for the weak spots above (on both courses, answers
+**Step 4, first piece (2026-11-17): opening CMP from Moodle.** CMP can now be added to a
+Moodle course as an external tool (LTI 1.3, the standard Moodle and Merlin use). A teacher
+who opens it the first time links the Moodle course to a CMP course; after that, students
+who open it land straight in that course's chat, signed in by Moodle, with no extra
+password. CMP keeps only an anonymous code per person, never names, e-mails or Moodle
+user numbers. Tried with a real Moodle running locally: the teacher linked the course and
+published a lecture, the student landed in the chat and got an answer.
+
+**Next:** CMP noticing new or changed files in the Moodle course by itself (step 4), then
+the pilot server and SRCE's approval for Merlin. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -209,6 +218,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
 | Question queue (step 3) | Teacher API: forwarded questions with the reason, answer with optional sources (checked against the course's files) or dismiss; no student identity shown; the student sees the teacher's answer in their history |
+| Moodle launch (step 4) | LTI 1.3 tool: Moodle opens CMP and says who the user is; teachers link the Moodle course once, students land in its chat; only anonymous codes stored; signed sessions replace the dev sign-in outside dev mode; a local Moodle in Docker for testing |
 | Teacher's settings (step 3) | Persona: ti/Vi, answer length, help with exercises, examples, terminology, topics passed to the teacher, free text; preview; activation only after a check that forwarding and answering still work |
 | Web pages (step 3) | React + Vite: teacher pages (courses, upload, review, approve, publish, question queue) and the student chat (AI notice, progress, answer with sources, teacher answers); runs in a dev container on port 5173 |
 | Student chat (step 3) | Chat API: answers from the live version only, server-sent progress then the checked answer with citations, AI notice first, forwarded questions to the teacher queue, own history, 👍/👎 |

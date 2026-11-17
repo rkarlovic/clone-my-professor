@@ -81,8 +81,50 @@ services:
       - ../frontend:/app
       - frontend_node_modules:/app/node_modules
 
+  # Local Moodle to test the LTI launch and Web Services (dev only, profile "moodle"):
+  #   docker compose -f infra/docker-compose.dev.yml --env-file .env --profile moodle up -d --build
+  #   then once: see CLAUDE.md "Commands" (install + infra/moodle/setup_cmp.php)
+  moodle-db:
+    profiles: ["moodle"]
+    image: pgvector/pgvector:0.8.6-pg18-trixie  # plain Postgres use; same image, no extra pull
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
+    volumes:
+      - moodle_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodle -d moodle"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  moodle:
+    profiles: ["moodle"]
+    build:
+      context: ./moodle
+    depends_on:
+      moodle-db:
+        condition: service_healthy
+    environment:
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:?set in .env}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD:?set in .env}
+      MOODLE_TEST_PASSWORD: ${MOODLE_TEST_PASSWORD:?set in .env}
+      MOODLE_WWWROOT: http://127.0.0.1:${MOODLE_HOST_PORT:-8080}
+      CMP_PUBLIC_URL: http://127.0.0.1:${FRONTEND_HOST_PORT:-5173}
+    ports:
+      - "127.0.0.1:${MOODLE_HOST_PORT:-8080}:80"
+    volumes:
+      - moodle_data:/var/www/moodledata
+      - ./moodle/config.php:/var/www/html/config.php:ro
+      - ./moodle/setup_cmp.php:/opt/cmp/setup_cmp.php:ro
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  moodle_pgdata:
+  moodle_data:
   frontend_node_modules:
   ollama_models:
   hf_cache:

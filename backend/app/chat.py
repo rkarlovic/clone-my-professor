@@ -98,14 +98,16 @@ def _live_course(kb_id: uuid.UUID) -> CourseInfo:
 
 @router.get("/{kb_id}")
 def course_info(kb_id: uuid.UUID, student: StudentDep) -> CourseInfo:
+    student.require(kb_id)
     return _live_course(kb_id)
 
 
 @router.get("/{kb_id}/messages")
 def my_messages(kb_id: uuid.UUID, student: StudentDep) -> list[MessageOut]:
+    student.require(kb_id)
     _live_course(kb_id)
     with Session(app_engine()) as s:
-        messages = history(s, kb_id, student)
+        messages = history(s, kb_id, student.ref)
         ids = [m.teacher_question_id for m in messages if m.teacher_question_id]
         answers = {q.id: q for q in s.query(TeacherQuestion).filter(TeacherQuestion.id.in_(ids))}
         return [_out(m, answers.get(m.teacher_question_id)) for m in messages]
@@ -113,6 +115,7 @@ def my_messages(kb_id: uuid.UUID, student: StudentDep) -> list[MessageOut]:
 
 @router.post("/{kb_id}/messages")
 def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> StreamingResponse:
+    student.require(kb_id)
     info = _live_course(kb_id)
     if not info.live:
         raise HTTPException(409, "the teacher has not published this course yet")
@@ -124,7 +127,7 @@ def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> St
         # Runs to the end even if the student closes the page, so a forwarded question
         # still reaches the teacher's queue and the exchange is stored.
         try:
-            message = ask(kb_id, student, question, on_stage=on_stage)
+            message = ask(kb_id, student.ref, question, on_stage=on_stage)
         except CourseNotLive as e:
             raise UserFacingError("the teacher has not published this course yet") from e
         return _out(message).model_dump(mode="json")
@@ -135,7 +138,7 @@ def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> St
 @router.post("/messages/{message_id}/feedback")
 def feedback(message_id: uuid.UUID, body: FeedbackIn, student: StudentDep) -> MessageOut:
     with Session(app_engine(), expire_on_commit=False) as s, s.begin():
-        message = set_feedback(s, message_id, student, body.helpful)
+        message = set_feedback(s, message_id, student.ref, body.helpful)
         if message is None:
             raise HTTPException(404, "message not found")
     return _out(message)

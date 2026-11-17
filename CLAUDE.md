@@ -184,6 +184,7 @@ _Update this section when a build step's state changes._
 **Step 1 (retrieval spike): pipeline built and measured; experiments and teacher review pending.**
 **Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
 **Step 3 (product): started 2026-11-17 with direct upload, see the step 3 block below.**
+**Step 4 (Moodle connector): started 2026-11-17 with the LTI 1.3 launch, see below.**
 
 Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
@@ -1017,6 +1018,59 @@ sign-in (see "Not yet" lists above).
 - Not yet: the student adaptation layer (layer 3), comparing a persona's check with the
   previous one's (the thresholds are absolute), a judge in the check (needs the GPU).
 
+**Step 4 (Moodle connector), part 1: LTI 1.3 launch and real sessions (2026-11-17).**
+- `core/lti.py` + `app/lti.py`: CMP is an LTI 1.3 tool. `/api/lti/login` (OIDC third-party
+  login: state + nonce stored in `lti_login_state`, single-use, 10 min; `target_link_uri` must
+  be CMP's own launch URL), `/api/lti/launch` (id_token verified against the platform's JWKS
+  with key-id refresh: RS256 signature, issuer, audience = client id (`azp` when several),
+  expiry/iat with 60 s leeway, nonce, registered deployment, `LtiResourceLinkRequest`, version
+  1.3.0, a context), `/api/lti/jwks` (the tool's RSA key, created on first use in
+  `data/keys/lti_tool.pem`, git-ignored; a mounted secret in production), `/api/lti/config`
+  (URLs an LMS admin enters). Platforms are registered with `scripts.lti_platform add`
+  (migration `0013`: `lti_platform`, `lti_login_state`, `platform_context_map`,
+  `teacher.external_ref`).
+- Roles: Instructor / ContentDeveloper / membership Administrator = teacher, everyone else =
+  student. A teacher's first launch from an unlinked LMS course opens "Povežite kolegij" (link
+  to one of their CMP courses or create one; many LMS courses -> one CMP course); later launches
+  go straight to the course page. Students of a linked course go to its chat; of an unlinked
+  one, to "Asistent još nije spreman" without a session.
+- **Rule 9**: only `sha256(issuer, LMS user id)` is kept (`teacher.external_ref`; students as
+  `student_ref` "lti:<hash>"); names, e-mails and the LMS id are never stored, and the dev
+  Moodle tool is set to never send name or e-mail. LMS teachers appear as "Nastavnik (LMS)".
+- **Sessions** (`core/sessions.py`): HS256 tokens (`SESSION_SECRET` from `.env`, ≥ 32 chars;
+  required unless `AUTH_MODE=dev`, where a random per-process secret is used), 8 h, audience
+  `cmp-session`; claims `sub` (opaque), `role`, `teacher_id`, `kbs` (a student's allowed
+  courses), `link` (a teacher's pending LMS course). The launch redirects to
+  `PUBLIC_URL/#/lti?next=…&token=…`: the token travels in the URL fragment (never sent to a
+  server or in Referer), the pages keep it in sessionStorage for the tab and remove it from the
+  address bar at once; no cookies (LMS iframes block them). `app/auth.py` accepts
+  `Authorization: Bearer` in every mode and the X-CMP-Dev-* headers only in dev mode; a student
+  token is limited to its courses (403 elsewhere), a student token cannot use teacher APIs.
+- Local Moodle (compose profile `moodle`): Moodle HQ's `moodle-php-apache` (pinned by digest) +
+  the official Moodle **5.0.12** release (SHA-256 checked at build; 5.1+ serves from `public/`,
+  another docroot), its own Postgres container, `infra/moodle/config.php` reading `.env`, and
+  `infra/moodle/setup_cmp.php` (CMP as an LTI 1.3 tool: keyset URL, login/redirect URLs, never
+  send name/e-mail, no grades (rule 7), launch replaces the Moodle window; course "Rad s
+  darovitom djecom (Moodle demo)" with teacher1 / student1 and the activity). Passwords are
+  random values in `.env` (`MOODLE_*`), never in files. DB install: 55 s.
+- Tests (`tests/test_lti.py`, 11, simulated platform with its own RSA key): teacher links, then
+  goes straight to the course; student gets the chat of the linked course only (403 elsewhere,
+  no teacher APIs); unlinked course → no session; refused: wrong audience, expired, foreign
+  nonce, unregistered deployment, deep-linking message, LTI 1.1, no context, foreign signature,
+  replayed state, unknown platform, foreign `target_link_uri`; rule 9 storage. Frontend: the
+  launch page keeps and hides the token; routes.
+- **End-to-end with the real Moodle** (browser): teacher1 opens the activity → CMP "Povežite
+  kolegij" with the Moodle course name (token already gone from the address bar) → new course
+  linked → course page; a lecture uploaded, approved, published with that session (another
+  teacher's dev header: 404); student1 opens the activity → straight into the chat (no sign-in
+  box) → "Koliko bodova treba za prolaz?" forwarded `admin`. Stored: `lti:<sha256>` and the
+  teacher's hash only.
+- Not yet: Moodle Web Services polling (part 2), Microsoft/Google sign-in for teachers using
+  CMP directly (needs app registrations by the institution), several teachers per course
+  (only the course's owner gets in; a co-teacher's launch sees an empty course list), the LTI
+  launch in an iframe (tested in the replace-window mode), deep linking, a dynamic-registration
+  flow and an admin page for platforms.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -1110,6 +1164,21 @@ docker compose -f infra/docker-compose.dev.yml --env-file .env --profile fronten
 docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend run --rm frontend npm test
 docker compose -f infra/docker-compose.dev.yml --env-file .env --profile frontend run --rm frontend npm run build
 #   npm run typecheck; npm install --save-exact <pkg>@<version> to add a package
+```
+
+Local Moodle for the LTI launch (dev only; passwords are the MOODLE_* values in .env):
+```bash
+docker compose -f infra/docker-compose.dev.yml --env-file .env --profile moodle up -d --build
+#   once, then setup (safe to run again); prints the values for lti_platform add
+docker compose -f infra/docker-compose.dev.yml --env-file .env --profile moodle exec -u www-data moodle \
+    sh -c 'php admin/cli/install_database.php --agree-license --lang=en --fullname="CMP dev Moodle" \
+    --shortname=cmpdev --adminuser=admin --adminpass="$MOODLE_ADMIN_PASSWORD" --adminemail=admin@moodle.test'
+MSYS_NO_PATHCONV=1 docker compose -f infra/docker-compose.dev.yml --env-file .env --profile moodle \
+    exec -u www-data moodle php /opt/cmp/setup_cmp.php
+cd backend && uv run python -m scripts.lti_platform add --name "Moodle (dev)" --issuer http://127.0.0.1:8080 \
+    --client-id <client_id> --auth-url http://127.0.0.1:8080/mod/lti/auth.php \
+    --jwks-url http://127.0.0.1:8080/mod/lti/certs.php --deployment-id <deployment_id>
+#   then http://127.0.0.1:8080 as teacher1 / student1 and open "Asistent (CMP)" in the course
 ```
 
 Planned (later build steps):

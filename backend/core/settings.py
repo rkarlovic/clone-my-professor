@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     # "dev": the teacher is named by the X-CMP-Dev-Teacher header (no sign-in; never in
     # production). SSO (Microsoft/Google) replaces it before the pilot.
     auth_mode: str = "dev"
+    # Signs session tokens (HS256). Required outside dev mode; in dev a random one is made per
+    # process (sessions then end when the API restarts). Set it in .env, never in code.
+    session_secret: str | None = None
+    session_hours: int = 8
+    # Where the web pages are served (LTI launches redirect there).
+    public_url: str = "http://127.0.0.1:5173"
+    # The tool's own RSA key for its JWKS (LTI); created on first use if missing. A mounted
+    # secret in production; data/ is git-ignored.
+    lti_tool_key_file: Path = REPO_ROOT / "data" / "keys" / "lti_tool.pem"
     # Auto-generated check questions per course (spread over the material by slide count).
     # On a CPU laptop each takes ~18 s with the dev 9B; on the pilot GPU about a second.
     check_questions: int = 60

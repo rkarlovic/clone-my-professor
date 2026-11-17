@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getIdentity, setIdentity, type Role } from "../identity";
+import { getIdentity, getToken, setIdentity, type Role } from "../identity";
 
 const LABEL: Record<Role, string> = { teacher: "Nastavnik", student: "Student" };
 
@@ -7,6 +7,8 @@ const LABEL: Record<Role, string> = { teacher: "Nastavnik", student: "Student" }
 export function DevSignIn({ role, onChange }: { role: Role; onChange?: (name: string) => void }) {
   const [name, setName] = useState(getIdentity(role));
   const [saved, setSaved] = useState(getIdentity(role));
+  if (getToken(role))
+    return <p className="small muted">Prijavljeni ste preko sustava za učenje.</p>;
   return (
     <form
       className="dev-signin"

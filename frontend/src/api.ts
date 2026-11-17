@@ -231,6 +231,20 @@ export const personaApi = {
     streamPost("teacher", `/api/courses/${kb}/persona/${n}/preview`, { question }, onEvent),
 };
 
+export interface LinkInfo {
+  context_title: string | null;
+  courses: { id: string; subject_name: string }[];
+}
+
+export const ltiApi = {
+  linkInfo: () => request<LinkInfo>("teacher", "/api/lti/link"),
+  link: (body: { kb_id?: string; new_course_name?: string }) =>
+    request<{ kb_id: string; token: string }>("teacher", "/api/lti/link", {
+      method: "POST",
+      body: json(body),
+    }),
+};
+
 // --- student -----------------------------------------------------------------------------
 
 export const studentApi = {

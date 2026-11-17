@@ -1,0 +1,62 @@
+"""Register an LMS (LTI 1.3 platform) with CMP, or list the registered ones.
+
+    uv run python -m scripts.lti_platform config          # the URLs to enter in the LMS
+    uv run python -m scripts.lti_platform list
+    uv run python -m scripts.lti_platform add --name "Moodle (dev)" \
+        --issuer http://127.0.0.1:8080 --client-id <from the LMS> \
+        --auth-url http://127.0.0.1:8080/mod/lti/auth.php \
+        --jwks-url http://127.0.0.1:8080/mod/lti/certs.php [--deployment-id 1]
+
+For Moodle the values are on the tool's "View configuration details" page. An admin UI for this
+comes with the institution setup; until then it is a command.
+"""
+
+import argparse
+import json
+import sys
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from core.db import app_engine
+from core.lti import tool_urls
+from core.models import LtiPlatform
+
+
+def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("config")
+    sub.add_parser("list")
+    add = sub.add_parser("add")
+    add.add_argument("--name", required=True)
+    add.add_argument("--issuer", required=True)
+    add.add_argument("--client-id", required=True)
+    add.add_argument("--auth-url", required=True)
+    add.add_argument("--jwks-url", required=True)
+    add.add_argument("--deployment-id", action="append", default=[])
+    args = ap.parse_args()
+
+    if args.cmd == "config":
+        print(json.dumps(tool_urls(), indent=2))
+        return
+    with Session(app_engine()) as s, s.begin():
+        if args.cmd == "list":
+            for p in s.scalars(select(LtiPlatform)):
+                print(f"{p.name}: {p.issuer} client {p.client_id} deployments {p.deployment_ids}")
+            return
+        existing = s.scalars(
+            select(LtiPlatform).where(
+                LtiPlatform.issuer == args.issuer, LtiPlatform.client_id == args.client_id
+            )
+        ).first()
+        p = existing or LtiPlatform(issuer=args.issuer, client_id=args.client_id)
+        p.name, p.auth_login_url, p.jwks_url = args.name, args.auth_url, args.jwks_url
+        p.deployment_ids = args.deployment_id
+        s.add(p)
+    print(("updated" if existing else "registered") + f": {args.name}")
+
+
+if __name__ == "__main__":
+    main()

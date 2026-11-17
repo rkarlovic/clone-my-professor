@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, studentApi, type ChatCourse, type Message } from "../api";
 import { citationLabel, sourceId, withCitations } from "../citations";
 import { DevSignIn } from "../components/DevSignIn";
-import { getIdentity } from "../identity";
+import { isSignedIn } from "../identity";
 
 // What the student sees while the clone works (the answer is shown only after its check).
 export const STAGES: Record<string, string> = {
@@ -13,7 +13,7 @@ export const STAGES: Record<string, string> = {
 };
 
 export function ChatPage({ kbId }: { kbId: string }) {
-  const [signedIn, setSignedIn] = useState(!!getIdentity("student"));
+  const [signedIn, setSignedIn] = useState(isSignedIn("student"));
   const [course, setCourse] = useState<ChatCourse | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
@@ -22,7 +22,7 @@ export function ChatPage({ kbId }: { kbId: string }) {
   const end = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    if (!getIdentity("student")) return;
+    if (!isSignedIn("student")) return;
     try {
       const c = await studentApi.course(kbId);
       setCourse(c);
