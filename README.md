@@ -29,8 +29,10 @@ Classroom) or from CMP's own web app. Content and users are primarily **Croatian
 *Plain-language summary, kept up to date. Technical detail and every measurement:
 [CLAUDE.md](CLAUDE.md), section "Current status".*
 
-**Where we are:** step 2 of 6. Step 1 (finding the right slide for a question) is done and
-measured; step 2 (writing answers) works and is being tuned. Everything runs on a laptop without a
+**Where we are:** step 3 of 6 has started. Step 1 (finding the right slide for a question)
+is done and measured; step 2 (writing answers) works, and its remaining fixes wait for the
+pilot server and the teacher's review. Step 3 builds the product: the first piece, uploading
+course files, works (see below). Everything runs on a laptop without a
 graphics card, so one answer takes about two minutes; on the pilot server it will take seconds.
 
 **Test course:** *Suvremene tehnike programiranja* (Java, one 945-page PDF of lecture slides),
@@ -122,9 +124,19 @@ Everything stopped goes to the teacher's question queue.
   instructions did not make it more reliable; a stronger grader model is the likely fix.
 - A few slides themselves are outdated or contain errors; that list goes to the teacher.
 
-**Next:** fixes for the weak spots above (on both courses, answers stretched from a nearby
-slide are the main one), the teacher's review of the question set, then step 3: chat window, teacher
-dashboard and upload. Choosing the final AI model waits for the pilot server.
+**Step 3, first piece (2026-11-17): upload.** A teacher can create a course and upload PDF,
+PowerPoint or Word files. The upload returns at once; a separate background worker then
+reads, splits and indexes the files, and the teacher can see its progress (queued,
+processing, ready, or failed with a reason and a retry). Each upload becomes a new draft
+version that students do not see yet. Files that did not change are copied over from the
+previous version instead of being processed again. There is no sign-in yet (a stand-in
+for development) and no web page yet: it is used through the API.
+
+**Next:** in step 3, the teacher's approval of a draft (and making it live), the automatic
+test questions after each upload, the teacher's question queue, the student chat window
+and the teacher's settings. Fixes for the weak spots above (on both courses, answers
+stretched from a nearby slide are the main one) and the teacher's review of the question
+sets continue alongside. Choosing the final AI model waits for the pilot server.
 
 ## Principles
 
@@ -149,6 +161,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Model layer | LiteLLM wrapper that resolves models by **role** from `config/models.yaml` |
 | Ingestion | Docling parsing (cached), slide-aware chunking, lecture labels from PDF bookmarks, repeated slides indexed once and cited on every page they appear on, BGE-M3 embeddings into pgvector; each run creates a new **draft** version |
 | Retrieval | Dense vector search filtered by `kb_version`, optional reranking |
+| Upload (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |
@@ -301,7 +314,8 @@ data/           course material per subject (git-ignored)
 cd backend
 uv run pytest                                  # tests; DB tests skip if Postgres is down
 uv run ruff check . && uv run ruff format .    # lint + format
-uv run fastapi dev app/main.py                 # API with reload
+uv run fastapi dev app/main.py                 # API with reload (teacher API under /api/courses)
+uv run python -m scripts.worker                # background worker that processes uploads
 ```
 
 Conventions (details in [CLAUDE.md](CLAUDE.md)):

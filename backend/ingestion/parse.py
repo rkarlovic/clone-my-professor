@@ -8,9 +8,9 @@ from pathlib import Path
 
 from docling_core.types.doc import DoclingDocument
 
-log = logging.getLogger(__name__)
+from core.storage import SUPPORTED_SUFFIXES  # noqa: F401  (re-exported for ingestion)
 
-SUPPORTED_SUFFIXES = {".pdf", ".pptx", ".docx"}
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

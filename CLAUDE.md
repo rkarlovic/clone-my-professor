@@ -183,6 +183,7 @@ _Update this section when a build step's state changes._
 
 **Step 1 (retrieval spike): pipeline built and measured; experiments and teacher review pending.**
 **Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
+**Step 3 (product): started 2026-11-17 with direct upload, see the step 3 block below.**
 
 Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
@@ -764,6 +765,53 @@ Decisions made in step 1:
     5 of 7 handbook-only, 3 of 5 Italian). The misses are answers stretched from a nearby page,
     the same failure as h22/h11 on the Java course, not invented topics.
 
+**Step 3 (product), part 1: direct upload with ingestion as a background job (2026-11-17).**
+- Teacher API (`app/courses.py`): `POST /api/courses` (new course = knowledge base),
+  `GET /api/courses`, `POST /api/courses/{id}/versions` (multipart `files`: PDF/PPTX/DOCX),
+  `GET /api/courses/{id}/versions[/{n}]`, `POST …/versions/{n}/retry` (failed only). A course
+  is visible only to its teacher (404 otherwise).
+- **Sign-in is a dev stub** (`app/auth.py`): with `AUTH_MODE=dev` (default) the teacher is
+  named by the `X-CMP-Dev-Teacher` header and created on first use; any other mode refuses
+  every request until SSO (Microsoft/Google) is added before the pilot.
+- An upload stores the files (`core/storage.py`: `<UPLOAD_DIR>/<kb_id>/<sha256><suffix>`,
+  default `data/uploads/`, one copy per content; the teacher's file name is never used as a
+  path; type and size checked, `MAX_UPLOAD_MB` 200) and creates a new **draft** version
+  (rule 5) with `pending_files` and `base_version_id` = the active version, else the newest
+  processed one. A file with the same name and content as in the base is not processed again;
+  a new name or new content is; nothing new → 409. A second upload while one is queued or
+  processing → 409 (it would build on an older version and drop that upload's files).
+- Migration `0006`: `kb_version.ingest_status` (queued | processing | ready | failed, separate
+  from the approval `status`), `ingest_error`, `ingest_report` (jsonb), `pending_files`,
+  `base_version_id`, `created_at`. Migration `0007` applies Procrastinate's schema (3.11); a
+  procrastinate upgrade needs a new revision with its migration SQL.
+- Jobs (`jobs/`): callers use only `jobs.enqueue_ingest` / `open_queue` / `close_queue`; the
+  Procrastinate app and task live in `jobs/app.py` and `jobs/tasks.py`. Queue `ingest`, one
+  job per course at a time (`lock`), never queued twice (`queueing_lock`). The job
+  (`ingestion.pipeline.process_version`) copies unchanged documents with their chunks and
+  embeddings from the base version (`copy_documents`, no re-parsing), processes the pending
+  files with the same `ingest_document` that `scripts.ingest` uses, and stores the report;
+  an error marks the version `failed` with the message, and a retry starts from a clean version.
+  The API enqueues after the version is committed; if queueing fails the version is `failed`,
+  not stuck.
+- Worker: `uv run python -m scripts.worker` (sets the selector event loop on Windows, which
+  psycopg's async mode needs). The API no longer imports Docling.
+- Tests (`tests/test_upload.py`): file names never carry a path, one stored copy per content,
+  bad files refused, which files an upload processes, carry-over copies documents/chunks/
+  embeddings with parent links and leaves the base untouched, API ownership/status codes.
+- **End-to-end check (2026-11-17)**, API (uvicorn) + worker on this laptop, two lectures of
+  `Rad_s_darovitom_djecom`:
+  - v1: 2 PPTX processed in 66 s (26 chunks, the same counts as the script ingest).
+  - The same file again → 409.
+  - v2: a new lecture + an unchanged one → 1 processed (6 s), 2 carried over; search on v2
+    finds both the new and the carried-over lecture.
+  - v3: a broken PDF → `failed` with "broken.pdf: the file could not be read (damaged,
+    password-protected or not really this type)"; the full error, with server paths, goes only
+    to the worker log. The retry re-queued it.
+- Not yet: approval and activation (next), the auto-generated check set after ingest, the
+  teacher deleting a file from a version, solution tagging for uploads (the folder rule only
+  applies to `scripts.ingest`), context sentences for uploads (off), containers for
+  `api`/`worker`, the frontend.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -839,14 +887,18 @@ uv run python -m scripts.evaluate --subject <folder>       # recall@5 + MRR on e
 #   --set PATH (another set for the subject, e.g. eval/sets/local/<subject>.teacher.yaml)
 uv run pytest                            # tests (DB tests skip if Postgres is down)
 uv run ruff check . && uv run ruff format .  # lint + format
-uv run fastapi dev app/main.py           # API with reload (only /health for now)
+uv run fastapi dev app/main.py           # API with reload: /health, /api/courses (teacher API)
+uv run python -m scripts.worker          # background worker: processes uploads (needs --group ingest)
+#   dev sign-in: send the header X-CMP-Dev-Teacher: <name>; e.g.
+#   curl -X POST 127.0.0.1:8000/api/courses -H "X-CMP-Dev-Teacher: ana" \
+#        -H "Content-Type: application/json" -d '{"subject_name": "Predmet"}'
+#   curl -X POST 127.0.0.1:8000/api/courses/<id>/versions -H "X-CMP-Dev-Teacher: ana" -F files=@slides.pptx
 ```
 
 Planned (later build steps):
 ```bash
 docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, frontend, langfuse, moodle
 docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
-uv run procrastinate --app=jobs.app worker                         # background worker
 cd frontend && npm install && npm run dev                          # npm test / npm run build
 ```
 

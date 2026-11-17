@@ -1,1 +1,30 @@
-"""Background jobs (Procrastinate). Code enqueues work only through this package's interface."""
+"""Background jobs. Code enqueues work only through the functions here (CLAUDE.md "Traffic and
+scaling"): the queue behind them (Procrastinate today) can be swapped without touching callers.
+
+Callers must have opened the queue once per process: `open_queue()` (the API does it at
+startup) and `close_queue()` at shutdown.
+"""
+
+import uuid
+
+
+def open_queue() -> None:
+    from jobs.app import app
+
+    app.open()
+
+
+def close_queue() -> None:
+    from jobs.app import app
+
+    app.close()
+
+
+def enqueue_ingest(kb_version_id: uuid.UUID, kb_id: uuid.UUID) -> int:
+    """Queue processing of an uploaded draft version. One ingest per course runs at a time
+    (lock), and the same version is never queued twice while waiting (queueing_lock)."""
+    from jobs.tasks import ingest_version
+
+    return ingest_version.configure(
+        lock=f"kb:{kb_id}", queueing_lock=f"ingest:{kb_version_id}"
+    ).defer(kb_version_id=str(kb_version_id))

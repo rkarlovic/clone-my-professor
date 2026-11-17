@@ -9,7 +9,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 EMBEDDING_DIM = 1024  # BGE-M3 dense
@@ -27,6 +27,15 @@ class KbVersionStatus(enum.StrEnum):
     draft = "draft"
     approved = "approved"
     active = "active"
+
+
+class IngestStatus(enum.StrEnum):
+    """Whether a version's material has been processed (separate from approval, rule 5)."""
+
+    queued = "queued"
+    processing = "processing"
+    ready = "ready"
+    failed = "failed"
 
 
 class ContentType(enum.StrEnum):
@@ -78,6 +87,16 @@ class KbVersion(Base):
     status: Mapped[KbVersionStatus] = mapped_column(
         Enum(KbVersionStatus, name="kb_version_status"), default=KbVersionStatus.draft
     )
+    ingest_status: Mapped[IngestStatus] = mapped_column(
+        Enum(IngestStatus, name="ingest_status"), default=IngestStatus.queued
+    )
+    ingest_error: Mapped[str | None] = mapped_column(Text)
+    ingest_report: Mapped[dict | None] = mapped_column(JSONB)
+    # Uploaded files still to process: [{"file_name", "file_hash", "path"}].
+    pending_files: Mapped[list[dict]] = mapped_column(JSONB, default=list, server_default="[]")
+    # Unchanged documents of this version are copied from here (no re-processing).
+    base_version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("kb_version.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Document(Base):
