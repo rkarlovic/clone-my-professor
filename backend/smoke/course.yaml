@@ -1,0 +1,112 @@
+# The smoke-test course (scripts.smoketest): written for CMP, owned by the project, so it can
+# ship with every installation. `slides` become smoke/osnove_pcelarstva.pptx (--build);
+# `questions` are asked after every install or model swap.
+#   expect: answer   -> must be answered citing the slide `slide` (1-based)
+#   expect: forward  -> must be forwarded to the teacher (rule 2), whatever the reason
+
+subject: "Osnove pčelarstva (provjera instalacije CMP-a)"
+file: osnove_pcelarstva.pptx
+
+slides:
+  - title: "Osnove pčelarstva"
+    bullets:
+      - "Kratki tečaj kojim CMP provjerava je li instalacija ispravna"
+      - "Sadržaj: pčelinja zajednica, razvoj pčela, košnice, paša, rojenje, varoa, med, zazimljavanje"
+  - title: "Pčelinja zajednica"
+    bullets:
+      - "Zajednicu čine matica, radilice i trutovi"
+      - "Ljeti u jednoj zajednici živi 40 000 do 60 000 pčela"
+      - "Matica je jedina spolno razvijena ženka u zajednici"
+  - title: "Matica"
+    bullets:
+      - "Matica polaže jaja: u punoj sezoni do 2 000 jaja dnevno"
+      - "Živi tri do pet godina"
+      - "Oplodi se u svadbenom letu u prvim tjednima života i poslije više ne izlijeće radi oplodnje"
+  - title: "Radilice"
+    bullets:
+      - "Radilice obavljaju sve poslove u košnici: čiste stanice, hrane ličinke, grade saće, skupljaju nektar i pelud"
+      - "Ljetne radilice žive oko šest tjedana"
+      - "Zimske pčele žive pet do šest mjeseci i griju zajednicu do proljeća"
+  - title: "Trutovi"
+    bullets:
+      - "Trutovi su mužjaci; njihova je jedina uloga oplodnja matice"
+      - "Trutovi nemaju žalac"
+      - "U jesen ih radilice izbacuju iz košnice"
+  - title: "Razvoj pčela"
+    bullets:
+      - "Svaka pčela prolazi razvoj: jajašce, ličinka, kukuljica, odrasla pčela"
+      - "Od jajašca do odrasle pčele: matica 16 dana, radilica 21 dan, trut 24 dana"
+  - title: "Košnice"
+    bullets:
+      - "U Hrvatskoj su najčešće LR (Langstroth-Root) i AŽ (Albertti-Žnideršič) košnice"
+      - "LR košnica ima nastavke koji se slažu jedan na drugi i otvara se odozgo"
+      - "AŽ košnica otvara se straga, kao ormar, a okviri se izvlače jedan po jedan"
+  - title: "Paša"
+    bullets:
+      - "Pčele s cvjetova skupljaju nektar (od njega nastaje med) i pelud (hrana za ličinke)"
+      - "Glavne paše u Hrvatskoj: bagrem u svibnju, zatim lipa, kesten i livadno bilje"
+  - title: "Rojenje"
+    bullets:
+      - "Rojenje je prirodno razmnožavanje zajednice: stara matica s dijelom pčela napušta košnicu"
+      - "Najčešće se događa u svibnju i lipnju"
+      - "Sprječava se proširivanjem prostora u košnici i uklanjanjem matičnjaka"
+  - title: "Varoa"
+    bullets:
+      - "Grinja Varroa destructor najopasniji je nametnik medonosne pčele"
+      - "Napadnutost se prati brojenjem prirodnog pada grinja na podnici košnice"
+      - "Suzbija se oksalnom kiselinom zimi, kad u zajednici nema legla"
+  - title: "Vrcanje meda"
+    bullets:
+      - "Med se vrca kad su barem dvije trećine stanica u okviru poklopljene voskom"
+      - "Nezreli med sadrži previše vode i može fermentirati"
+  - title: "Ostali pčelinji proizvodi"
+    bullets:
+      - "Propolis: smola kojom pčele brtve pukotine i čuvaju košnicu od bolesti"
+      - "Vosak, matična mliječ i pelud"
+  - title: "Zaštitna oprema"
+    bullets:
+      - "Šešir s mrežom, rukavice i kombinezon"
+      - "Dimilica: dim smiruje pčele dok pčelar pregledava košnicu"
+  - title: "Zazimljavanje"
+    bullets:
+      - "Krajem ljeta zajednica treba imati 15 do 20 kg meda kao zalihu hrane"
+      - "Prije zime treba suzbiti varou i provjeriti ima li zajednica mladu, dobru maticu"
+
+questions:
+  - id: s01
+    question: "koliko jaja dnevno moze snijeti matica"
+    expect: answer
+    slide: 3
+  - id: s02
+    question: "Imaju li trutovi žalac?"
+    expect: answer
+    slide: 5
+  - id: s03
+    question: "Koliko traje razvoj radilice od jajašca do odrasle pčele?"
+    expect: answer
+    slide: 6
+  - id: s04
+    question: "Kad je med spreman za vrcanje?"
+    expect: answer
+    slide: 11
+  - id: s05
+    question: "Čime se suzbija varoa i u koje doba godine?"
+    expect: answer
+    slide: 10
+  - id: s06
+    question: "Po čemu se razlikuju LR i AŽ košnice?"
+    expect: answer
+    slide: 7
+  - id: s07
+    question: "My bees left the hive in spring together with the old queen. What is that called?"
+    expect: answer
+    slide: 9
+  - id: s08
+    question: "Koliko bodova treba za prolaz?"
+    expect: forward
+  - id: s09
+    question: "Moram li dolaziti na predavanja?"
+    expect: forward
+  - id: s10
+    question: "Kako se računa derivacija funkcije?"
+    expect: forward

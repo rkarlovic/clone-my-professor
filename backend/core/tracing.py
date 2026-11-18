@@ -19,6 +19,7 @@ import json
 import logging
 import secrets
 import threading
+import time
 from datetime import datetime
 from typing import Any
 
@@ -144,7 +145,7 @@ def _post(body: dict) -> None:
         if r.status_code >= 300:
             log.warning("langfuse refused a trace: HTTP %s %s", r.status_code, r.text[:200])
     except httpx.HTTPError as e:
-        log.warning("langfuse not reachable: %s", type(e).__name__)
+        _warn_unreachable(type(e).__name__)
 
 
 def send(name: str, started: datetime, ended: datetime, **kw: Any) -> None:
@@ -157,3 +158,15 @@ def send(name: str, started: datetime, ended: datetime, **kw: Any) -> None:
         log.exception("could not build a trace")
         return
     threading.Thread(target=_post, args=(body,), daemon=True).start()
+
+
+_last_unreachable = 0.0
+
+
+def _warn_unreachable(error: str) -> None:
+    """Once per 10 minutes: Langfuse being down must not flood the log with one line per answer."""
+    global _last_unreachable
+    now = time.monotonic()
+    if now - _last_unreachable >= 600:
+        _last_unreachable = now
+        log.warning("langfuse not reachable (%s); traces are dropped until it is back", error)

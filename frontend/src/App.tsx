@@ -4,6 +4,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { CoursePage } from "./pages/CoursePage";
 import { HomePage } from "./pages/HomePage";
 import { InvitePage } from "./pages/InvitePage";
+import { TeamsConfigPage, TeamsTabPage } from "./pages/TeamsPage";
 import { LtiPage } from "./pages/LtiPage";
 import { TeacherHome } from "./pages/TeacherHome";
 import { type Route, useRoute } from "./router";
@@ -20,6 +21,8 @@ function Page({ route }: { route: Route }) {
       return <LtiPage query={route.query} />;
     case "admin":
       return <AdminPage />;
+    case "teams":
+      return route.config ? <TeamsConfigPage /> : <TeamsTabPage />;
     case "invite":
       return <InvitePage code={route.code} />;
     default:

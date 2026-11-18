@@ -13,6 +13,7 @@ from app.questions import router as questions_router
 from app.sso import router as sso_router
 from app.sync import router as sync_router
 from app.team import router as team_router
+from app.teams import router as teams_router
 from jobs import close_queue, open_queue
 
 
@@ -36,6 +37,7 @@ app.include_router(notifications_router)
 app.include_router(admin_router)
 app.include_router(sso_router)
 app.include_router(team_router)
+app.include_router(teams_router)
 
 
 @app.get("/health")

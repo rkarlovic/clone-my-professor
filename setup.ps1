@@ -14,6 +14,7 @@
   .\setup.ps1 -Install         # also install missing Git / Docker Desktop (needs admin rights)
   .\setup.ps1 -WithMoodle      # plus a local test Moodle
   .\setup.ps1 -WithTracing     # plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
+  .\setup.ps1 -Check           # then run the smoke test (10 questions; ~12 min on a CPU)
   .\setup.ps1 -Stop            # stop everything (data is kept)
   .\setup.ps1 -Status
 #>
@@ -21,6 +22,7 @@ param(
     [switch]$Install,
     [switch]$WithMoodle,
     [switch]$WithTracing,
+    [switch]$Check,
     [switch]$Stop,
     [switch]$Status,
     [string]$Site = "localhost",
@@ -179,16 +181,10 @@ Say ("Building and starting CMP" + $(if ($gpu) { " (NVIDIA GPU found: vLLM inclu
 Dc up -d --build
 
 # --- 6. models -----------------------------------------------------------------------------------
-$modelsFile = if ($gpu) { "config\models.vllm.yaml" } else { "config\models.yaml" }
-$needed = @(); $role = ""
-foreach ($line in Get-Content $modelsFile) {
-    if ($line -match '^  (\w+):\s*(#.*)?$') { $role = $Matches[1] }
-    elseif ($line -match '^\s+model:\s*ollama(_chat)?/(\S+)' -and $role -ne "vision") { $needed += $Matches[2] }
-}
-foreach ($m in ($needed | Select-Object -Unique)) {
-    Say "Downloading model $m (once; can take a while)..."
-    Dc exec -T ollama ollama pull $m
-}
+# The api container reads the active models file (models.vllm.yaml with a GPU) and pulls every
+# Ollama model it names that is missing; vLLM downloads its own model (VLLM_MODEL) on start.
+Say "Checking the AI models (missing ones are downloaded once; can take a while)..."
+Dc exec -T api python -m scripts.models --pull
 
 # --- 7. wait until CMP answers --------------------------------------------------------------------
 Say "Waiting for ${scheme}://$siteName ..."
@@ -220,6 +216,13 @@ if ($WithMoodle) {
     Dc exec -T api python -m scripts.lti_platform ws --issuer $info.issuer --base-url "http://moodle" --token-env TEST_MOODLE_WS_TOKEN
 }
 
+
+# --- 9. optional: smoke test ------------------------------------------------------------------------
+if ($Check) {
+    Say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
+    & docker @Compose exec -T api python -m scripts.smoketest
+    if ($LASTEXITCODE -ne 0) { Warn "The smoke test did not pass; see the lines marked FAIL above." }
+}
 # --- done -------------------------------------------------------------------------------------------
 Write-Host ""
 Say "CMP is running: ${scheme}://$siteName"

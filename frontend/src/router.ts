@@ -10,7 +10,8 @@ export type Route =
   | { page: "chat"; kbId: string }
   | { page: "lti"; query: URLSearchParams }
   | { page: "admin" }
-  | { page: "invite"; code: string };
+  | { page: "invite"; code: string }
+  | { page: "teams"; config: boolean };
 
 export function parseRoute(hash: string): Route {
   const [path, query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
@@ -18,6 +19,7 @@ export function parseRoute(hash: string): Route {
   if (parts[0] === "lti") return { page: "lti", query: new URLSearchParams(query) };
   if (parts[0] === "admin") return { page: "admin" };
   if (parts[0] === "invite" && parts[1]) return { page: "invite", code: parts[1] };
+  if (parts[0] === "teams") return { page: "teams", config: parts[1] === "config" };
   if (parts[0] === "teacher" && parts[1]) return { page: "course", kbId: parts[1] };
   if (parts[0] === "teacher") return { page: "teacher" };
   if (parts[0] === "chat" && parts[1]) return { page: "chat", kbId: parts[1] };

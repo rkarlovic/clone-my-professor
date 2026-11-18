@@ -255,6 +255,21 @@ fixed, a 144-second answer now arrives in full.
   and Slides are converted). This was tested against simulated services only; it needs a
   real school account to try.
 
+**Teams without LTI, a smoke test, model downloads (2026-11-18).**
+- Schools whose Teams can't use LTI can add CMP as a **Teams tab**. Teams signs the user in;
+  CMP asks Microsoft which team members are owners (treated as teachers) and which are
+  members (students). From there it works as in Moodle: a teacher links the team to a course
+  once, and members get its chat. A script builds the app package the school uploads to
+  Teams. Tested only against simulated Microsoft services.
+- **Smoke test:** a 14-slide course of our own (beekeeping basics) and 10 questions show in
+  one go whether an installation or a newly chosen AI model works. It runs every part for
+  real and removes its course afterwards. First run on this laptop: 10 of 10 right, about
+  10 minutes; on a GPU server it will take seconds. `.\setup.ps1 -Check` runs it after
+  installing.
+- **Models:** which model does which job is set in `config/models.yaml` (without a GPU) or
+  `config/models.vllm.yaml` (with one). A new command, also used by the setup scripts, lists
+  them and downloads whatever is missing.
+
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
 with a real school's accounts. Fixes for the weak spots above (on both courses, answers
@@ -294,11 +309,12 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Sign-in and teams | Teachers: Microsoft/Google (institution accounts only) or LTI; course invites, owners, removing teachers; students only through their learning platform |
-| Teams and Classroom (step 5) | Launch via LTI 1.3; material sync through Microsoft Graph (team files) and Classroom + Drive (published materials, Docs/Slides exported) |
+| Teams and Classroom (step 5) | Launch via LTI 1.3, or (Teams without LTI) a Teams tab app with Teams sign-in; material sync through Microsoft Graph (team files) and Classroom + Drive (published materials, Docs/Slides exported) |
 | Tracing | One Langfuse trace per answer with every model call (OpenTelemetry), self-hosted next to CMP; optional |
 | Collected questions | 👎 answers go to the teacher; queue answers with a source become the course's own test questions, checked after each upload and exportable for the evaluators |
 | Chat | Short follow-ups rewritten to stand on their own; 30 questions per hour per student and course, one at a time |
-| Tests | pytest (174): RLS isolation, model config, chunking, citations, answer checks, queue, LTI, sign-in, sync, connectors, tracing; Vitest (22) for the pages |
+| Smoke test | `scripts.smoketest`: our own 14-slide course + 10 questions, every part for real; `setup -Check` |
+| Tests | pytest (178): RLS isolation, model config, chunking, citations, answer checks, queue, LTI, sign-in, sync, connectors, tracing; Vitest (22) for the pages |
 
 Retrieval: recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense
 search, **0.89** with a context sentence per chunk (`--context`, the current default version), and
@@ -338,13 +354,14 @@ can install both itself. Windows (PowerShell):
 .\setup.ps1 -Install       # also install missing Git / Docker Desktop (winget, admin rights)
 .\setup.ps1 -WithMoodle    # plus a local test Moodle connected to CMP
 .\setup.ps1 -WithTracing   # plus Langfuse: a record of every answer (http://127.0.0.1:3000)
+.\setup.ps1 -Check         # then the smoke test: 10 questions on a small course of our own
 .\setup.ps1 -Stop          # stop everything (data is kept); -Status shows the containers
 ```
 
 Linux / macOS:
 
 ```bash
-./setup.sh                 # same switches: --install, --with-moodle, --with-tracing, --stop, --status
+./setup.sh                 # same switches: --install, --with-moodle, --with-tracing, --check, --stop, --status
 ```
 
 Run on its own (not from a clone), the script fetches the project first. It creates `.env`
@@ -458,6 +475,22 @@ Switching a model means editing that file and re-running the golden set — no c
 
 The dev chat models are placeholders that fit an 11 GB GPU. The real choice for `answer` is made on
 golden-set results from the vLLM setup used in the pilot, never on Ollama's quantized models.
+
+Two model files: `config/models.yaml` (no GPU: everything through Ollama) and
+`config/models.vllm.yaml` (with an NVIDIA GPU: the chat roles through vLLM, which serves the one
+model named by `serve_model`). The setup scripts pick the file and download what it names.
+
+To try another model (e.g. a Mistral): change the `model:` lines (Ollama names such as
+`ollama_chat/mistral-small3.2:24b`, or `serve_model` + `hosted_vllm/<Hugging Face id>` for vLLM)
+and raise `version`, then:
+
+```bash
+cd backend && uv run python -m scripts.models --pull   # downloads missing Ollama models
+uv run python -m scripts.smoketest                     # 10 questions: does it still work?
+```
+
+vLLM downloads its `serve_model` from Hugging Face by itself when it starts (rerun the setup
+script after changing it). Whether a model is *better* is decided on the full question sets.
 
 ## Repository layout
 

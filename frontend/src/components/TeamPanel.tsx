@@ -6,6 +6,7 @@ const VIA: Record<Member["added_via"], string> = {
   owner: "osnovao/la kolegij",
   lti: "iz sustava za učenje",
   invite: "na poziv",
+  teams: "iz Microsoft Teamsa",
 };
 
 /** The course's teachers: invite (owners), remove, make owner, leave. */

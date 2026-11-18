@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     langfuse_host: str | None = None
     langfuse_public_key: str | None = None
     langfuse_secret_key: str | None = None
+    # The Teams tab (core/teams.py): the Entra app's client id that Teams single sign-on issues
+    # tokens for, and its app id URI (api://<host>/<client id>, from "Expose an API").
+    teams_app_client_id: str | None = None
+    teams_app_id_uri: str | None = None
     # Where the web pages are served (LTI launches redirect there).
     public_url: str = "http://127.0.0.1:5173"
     # The tool's own RSA key for its JWKS (LTI); created on first use if missing. A mounted

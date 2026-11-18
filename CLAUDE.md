@@ -1336,6 +1336,43 @@ Teams and Classroom (2026-11-18).**
 - Tests: backend 174 (new: `test_sso`, `test_tracing`, `test_collected`, `test_followup`,
   `test_connectors`), frontend 22.
 
+**Step 5, part 2: Teams tab app, smoke test, model check (2026-11-18).**
+- **Teams tab app** for schools without LTI in Teams (`core/teams.py`, `app/teams.py`,
+  `pages/TeamsPage.tsx`, `scripts.teams_app`). A configurable channel tab whose page is CMP's
+  own (`#/teams`; `#/teams/config` only saves the tab). The page loads `@microsoft/teams-js`
+  2.58.0 (only there), asks Teams for an SSO token and posts it with the team's group id to
+  `POST /api/teams/session`. The server verifies the token (Microsoft's common key set,
+  audience = `TEAMS_APP_CLIENT_ID` or `TEAMS_APP_ID_URI`, issuer = the token's own tenant in
+  v1 or v2 form, expiry), requires the tenant to be a registered platform of kind `teams`, and
+  **never trusts the team id alone**: Microsoft Graph, with the platform's sync credentials,
+  says owner (= teacher) or member (= student); anyone else is refused. Then it is the LTI
+  flow (`next`: link | teacher/<kb> | chat/<kb> | not-linked, landing on `#/lti`): owners link
+  the team once or join a linked course (`added_via = teams`), members get the chat. The team
+  id is the link's context id, so the same platform row also syncs the team's files. Rule 9:
+  only sha256("teams:"+tenant, object id). A Teams tenant can be registered without LTI fields
+  (admin page; the issuer becomes its Entra issuer). `scripts.teams_app` builds the package
+  (manifest 1.17 + icons, a stable app id per installation) and prints the Teams origins for
+  `CMP_FRAME_ANCESTORS`; its docstring lists the Entra setup (exposed API scope with Teams'
+  clients pre-authorised, `GroupMember.Read.All` + file read permissions, token version 2).
+  Tests: token checks, owner/member/stranger, linking, a second owner, Graph membership
+  (simulated). **Not tried in a real Teams tenant.**
+- **Smoke test** (`scripts.smoketest`, `backend/smoke/`): CMP's own course (14 slides on
+  beekeeping basics, written for the project so it can ship; `course.yaml` is the source,
+  `--build` makes the .pptx) and 10 questions: 7 to answer citing the right slide (casual,
+  no diacritics, English) and 3 to forward (points, attendance, another subject). It creates
+  a course under a dedicated teacher, runs Docling + embeddings + RLS for real, approves and
+  publishes, asks through `answer_question` (source `smoke`; nothing stored as a student
+  exchange or queued), then deletes the course. Passes with all 3 forwarded and ≥ 5/7
+  answered citing their slide; exit code 0/1. `setup.ps1 -Check` / `setup.sh --check` run it
+  in the api container after installing. **First run (dev models on this CPU laptop):
+  PASSED 10/10** in 582 s: course processed and published in 91 s, the 7 answers 60–82 s each,
+  each citing its slide (incl. the no-diacritics and the English question), the 3 forwards
+  `admin`, `admin` (attendance), `out_of_scope`; the test course was removed afterwards.
+- **Model check** (`scripts.models`): lists the roles and models of the active config and
+  whether each Ollama model is present; `--pull` downloads the missing ones (through Ollama's
+  API), warns when a role asks vLLM for a model other than `serve_model`. The setup scripts
+  now call it inside the api container instead of parsing the YAML themselves.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -1455,8 +1492,8 @@ MSYS_NO_PATHCONV=1 docker compose -f infra/docker-compose.dev.yml --env-file .en
 
 The installation (everything in containers; see "Step 4, part 7"):
 ```bash
-.\setup.ps1 [-Install] [-WithMoodle] [-WithTracing] [-Site cmp.example.hr] [-NoDevSignIn] [-Stop] [-Status]
-./setup.sh  [--install] [--with-moodle] [--with-tracing] [--site cmp.example.hr] [--no-dev-signin] [--stop] [--status]
+.\setup.ps1 [-Install] [-WithMoodle] [-WithTracing] [-Check] [-Site cmp.example.hr] [-NoDevSignIn] [-Stop] [-Status]
+./setup.sh  [--install] [--with-moodle] [--with-tracing] [--check] [--site cmp.example.hr] [--no-dev-signin] [--stop] [--status]
 #   by hand: docker compose -f infra/docker-compose.yml [-f infra/docker-compose.gpu.yml] \
 #            --env-file .env [--profile moodle] up -d --build
 #   in a dev checkout, reuse the dev stack's downloaded models instead of pulling them again:
@@ -1481,6 +1518,16 @@ uv run python -m scripts.lti_platform sync --issuer <issuer> --kind teams \
     --tenant-id <tenant> --client-id <app id> --secret-env CMP_TEAMS_SECRET
 uv run python -m scripts.lti_platform sync --issuer <issuer> --kind classroom \
     --subject sync@school.edu --secret-env CMP_GOOGLE_SA_KEY
+uv run python -m scripts.teams_app --out cmp-teams.zip   # Teams tab package (needs TEAMS_APP_CLIENT_ID)
+```
+
+Models and the smoke test:
+```bash
+cd backend && uv run python -m scripts.models          # roles -> models, which are missing
+uv run python -m scripts.models --pull                 # download missing Ollama models
+uv run python -m scripts.smoketest                     # 10 questions on CMP's own course; exit 0/1
+#   --ids s01,s08, --keep (leave the course), --build (rebuild smoke/osnove_pcelarstva.pptx)
+.\setup.ps1 -Check                                     # installation: the same in the api container
 ```
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects
@@ -1491,7 +1538,7 @@ KB content is read/written only inside `core.db.kb_scope(kb_version_id)`.
 - Which open model wins the `answer` role (Qwen 3.5 vs Mistral Small 4 vs Gemma 4) — decided by golden-set results on Croatian material.
 - GPU hosting for the pilot: own hardware vs rented EU cloud GPU (one 24 GB GPU fits the ~30B class). Measure parallel conversations per GPU at acceptable latency.
 - `judge` role: an open model may be too weak to grade reliably. The internal benchmark holds no personal data, so a stronger (possibly commercial) judge for it only is an option — decide explicitly. Local checks (collected real questions contain student text) must use a judge that runs inside the installation.
-- Whether to ship an optional **smoke test** with CMP: a small course written by us (owned by the project, so nothing to approve or revoke) with ~30 questions, to check that an installation or a swapped model works. Not decided; revisit later.
+- ~~Smoke test~~: decided and built 2026-11-18 (10 questions on our own course, `scripts.smoketest`, `setup -Check`).
 - Whether the pilot institution accepts open models of non-EU origin (Qwen) when self-hosted in the EU.
 - Pilot institution, subject(s) and teacher(s); SRCE contact for Merlin.
 - Business model: who pays (institution licence is the working assumption).

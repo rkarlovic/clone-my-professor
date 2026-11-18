@@ -8,24 +8,26 @@
 #   ./setup.sh --install       also install missing Git / Docker (apt, dnf or Homebrew; sudo)
 #   ./setup.sh --with-moodle   plus a local test Moodle connected to CMP
 #   ./setup.sh --with-tracing  plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
+#   ./setup.sh --check         then run the smoke test (10 questions; ~12 min on a CPU)
 #   ./setup.sh --stop          stop everything (data is kept)
 #   ./setup.sh --status
 #   options: --site <host name> (default localhost)  --no-dev-signin  --dir <folder>
 set -euo pipefail
 
 REPO_URL="https://github.com/rkarlovic/clone-my-professor.git"
-INSTALL=0 WITH_MOODLE=0 WITH_TRACING=0 STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
+INSTALL=0 WITH_MOODLE=0 WITH_TRACING=0 CHECK=0 STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
 while [ $# -gt 0 ]; do
   case "$1" in
     --install) INSTALL=1 ;;
     --with-moodle) WITH_MOODLE=1 ;;
     --with-tracing) WITH_TRACING=1 ;;
+    --check) CHECK=1 ;;
     --stop) STOP=1 ;;
     --status) STATUS=1 ;;
     --site) SITE="$2"; shift ;;
     --no-dev-signin) NO_DEV=1 ;;
     --dir) DIR="$2"; shift ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "unknown option $1"; exit 1 ;;
   esac
   shift
@@ -155,12 +157,10 @@ else say "Building and starting CMP (no NVIDIA GPU: models run on the CPU)..."; 
 "${COMPOSE[@]}" up -d --build
 
 # --- 6. models -----------------------------------------------------------------------------------
-MODELS_FILE=config/models.yaml; [ "$GPU" = 1 ] && MODELS_FILE=config/models.vllm.yaml
-NEEDED=$(awk '/^  [a-z_]+:/{role=$1; sub(":","",role)} /^ +model: *ollama(_chat)?\//{ if (role!="vision") { m=$2; sub(/^ollama(_chat)?\//,"",m); print m } }' "$MODELS_FILE" | sort -u)
-for m in $NEEDED; do
-  say "Downloading model $m (once; can take a while)..."
-  "${COMPOSE[@]}" exec -T ollama ollama pull "$m"
-done
+# The api container reads the active models file (models.vllm.yaml with a GPU) and pulls every
+# Ollama model it names that is missing; vLLM downloads its own model (VLLM_MODEL) on start.
+say "Checking the AI models (missing ones are downloaded once; can take a while)..."
+"${COMPOSE[@]}" exec -T api python -m scripts.models --pull
 
 # --- 7. wait until CMP answers --------------------------------------------------------------------
 SITE_NAME="$(get_env CMP_SITE)"
@@ -194,6 +194,12 @@ if [ "$WITH_MOODLE" = 1 ]; then
     --base-url http://moodle --token-env TEST_MOODLE_WS_TOKEN
 fi
 
+
+# --- 9. optional: smoke test ------------------------------------------------------------------------
+if [ "$CHECK" = 1 ]; then
+  say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
+  "${COMPOSE[@]}" exec -T api python -m scripts.smoketest || warn "The smoke test did not pass; see the lines marked FAIL above."
+fi
 # --- done -------------------------------------------------------------------------------------------
 echo
 say "CMP is running: $SCHEME://$SITE_NAME"

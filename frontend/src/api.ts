@@ -398,7 +398,7 @@ export interface Member {
   teacher_id: string;
   name: string;
   role: "owner" | "teacher";
-  added_via: "owner" | "lti" | "invite";
+  added_via: "owner" | "lti" | "invite" | "teams";
   added_at: string;
   me: boolean;
 }

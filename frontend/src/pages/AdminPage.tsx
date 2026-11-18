@@ -193,7 +193,8 @@ export function AdminPage() {
               {editing.body.kind === "teams" && (
                 <>
                   <p className="small muted">
-                    Preuzimanje materijala iz Teamsa: aplikacija u Entra ID-u ustanove s dopuštenjem samo
+                    Bez LTI-ja u Teamsu (samo kartica CMP-a) polja LTI iznad ostavite prazna. Preuzimanje
+                    materijala iz Teamsa: aplikacija u Entra ID-u ustanove s dopuštenjem samo
                     za čitanje datoteka (Files.Read.All ili Sites.Selected) i suglasnošću administratora.
                   </p>
                   {configField("tenant_id", "Tenant ID (Entra ID)")}
