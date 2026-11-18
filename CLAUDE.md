@@ -1372,6 +1372,25 @@ Teams and Classroom (2026-11-18).**
   whether each Ollama model is present; `--pull` downloads the missing ones (through Ollama's
   API), warns when a role asks vLLM for a model other than `serve_model`. The setup scripts
   now call it inside the api container instead of parsing the YAML themselves.
+- **Benchmark in one command** (`scripts.benchmark`, 2026-11-18), for running the internal
+  benchmark on a GPU PC without the dev setup: for every folder in `data/` with a set
+  (`eval/sets/<subject>.yaml` = "golden", `eval/sets/local/<subject>.<name>.yaml`), ingest once
+  (later runs reuse the newest processed version; `--reingest`, `--context`), then
+  `scripts.evaluate` and `scripts.evaluate_answers --judge` per set (the existing scripts, as
+  subprocesses; their reports as before) and a summary
+  `eval/reports/benchmark-<models version>-<time>.md/.json` (numbers only). Options
+  `--subjects`, `--sets`, `--retrieval-only`, `--no-judge`, `--limit`. Runs in the one-off
+  `benchmark` service of `infra/docker-compose.yml` (profile `benchmark`: the project's `data/`
+  and `eval/` bind-mounted, `HF_HOME` on the installation's data volume); `setup.ps1
+  -Benchmark [-BenchmarkArgs "…"]` / `setup.sh --benchmark [--benchmark-args "…"]` (Linux runs
+  it as the calling user so the reports stay theirs). Exit 1 if a step failed.
+  **Checked in the installed stack on this laptop:** `Rad_s_darovitom_djecom` ingested from the
+  parse cache and all four sets searched in 6.5 min, numbers identical to the dev runs (teacher
+  0.90 / 0.75, check 0.83 / 0.64, students 1.00); `--sets students --limit 2`: 2/2 answered
+  citing the expected slide, judged grounded.
+- **`docs/GPU-SETUP.md`**: step by step for the GPU PC without help: what to copy from the old
+  computer (course folders, parse cache, `eval/sets/local/`; not in git), which model fits the
+  card's memory, setup with the smoke test, the benchmark and comparing models, troubleshooting.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
@@ -1528,6 +1547,8 @@ uv run python -m scripts.models --pull                 # download missing Ollama
 uv run python -m scripts.smoketest                     # 10 questions on CMP's own course; exit 0/1
 #   --ids s01,s08, --keep (leave the course), --build (rebuild smoke/osnove_pcelarstva.pptx)
 .\setup.ps1 -Check                                     # installation: the same in the api container
+.\setup.ps1 -Benchmark [-BenchmarkArgs "--retrieval-only"]   # internal benchmark (docs/GPU-SETUP.md)
+#   = docker compose -f infra/docker-compose.yml --env-file .env run --rm benchmark #       python -m scripts.benchmark [--subjects A] [--sets teacher] [--limit N] [--no-judge]
 ```
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects

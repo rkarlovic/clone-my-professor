@@ -15,6 +15,8 @@
   .\setup.ps1 -WithMoodle      # plus a local test Moodle
   .\setup.ps1 -WithTracing     # plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
   .\setup.ps1 -Check           # then run the smoke test (10 questions; ~12 min on a CPU)
+  .\setup.ps1 -Benchmark       # then the internal benchmark on the courses in data\ (docs/GPU-SETUP.md)
+  .\setup.ps1 -Benchmark -BenchmarkArgs "--retrieval-only"   # options of scripts.benchmark
   .\setup.ps1 -Stop            # stop everything (data is kept)
   .\setup.ps1 -Status
 #>
@@ -23,6 +25,8 @@ param(
     [switch]$WithMoodle,
     [switch]$WithTracing,
     [switch]$Check,
+    [switch]$Benchmark,
+    [string]$BenchmarkArgs = "",
     [switch]$Stop,
     [switch]$Status,
     [string]$Site = "localhost",
@@ -222,6 +226,13 @@ if ($Check) {
     Say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
     & docker @Compose exec -T api python -m scripts.smoketest
     if ($LASTEXITCODE -ne 0) { Warn "The smoke test did not pass; see the lines marked FAIL above." }
+}
+# --- 10. optional: the internal benchmark (course folders in data\, sets in eval\sets\) -------------
+if ($Benchmark) {
+    Say "Benchmark: every course in data\ with a question set; summary in eval\reports\ (hours on a CPU)..."
+    $extra = if ($BenchmarkArgs) { $BenchmarkArgs -split '\s+' } else { @() }
+    & docker @Compose run --rm benchmark python -m scripts.benchmark @extra
+    if ($LASTEXITCODE -ne 0) { Warn "The benchmark reported failed steps; see 'Failed' at the end of its output." }
 }
 # --- done -------------------------------------------------------------------------------------------
 Write-Host ""

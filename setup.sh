@@ -9,25 +9,29 @@
 #   ./setup.sh --with-moodle   plus a local test Moodle connected to CMP
 #   ./setup.sh --with-tracing  plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
 #   ./setup.sh --check         then run the smoke test (10 questions; ~12 min on a CPU)
+#   ./setup.sh --benchmark     then the internal benchmark on the courses in data/ (docs/GPU-SETUP.md)
+#   ./setup.sh --benchmark --benchmark-args "--retrieval-only"   options of scripts.benchmark
 #   ./setup.sh --stop          stop everything (data is kept)
 #   ./setup.sh --status
 #   options: --site <host name> (default localhost)  --no-dev-signin  --dir <folder>
 set -euo pipefail
 
 REPO_URL="https://github.com/rkarlovic/clone-my-professor.git"
-INSTALL=0 WITH_MOODLE=0 WITH_TRACING=0 CHECK=0 STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
+INSTALL=0 WITH_MOODLE=0 WITH_TRACING=0 CHECK=0 BENCHMARK=0 BENCHMARK_ARGS="" STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
 while [ $# -gt 0 ]; do
   case "$1" in
     --install) INSTALL=1 ;;
     --with-moodle) WITH_MOODLE=1 ;;
     --with-tracing) WITH_TRACING=1 ;;
     --check) CHECK=1 ;;
+    --benchmark) BENCHMARK=1 ;;
+    --benchmark-args) BENCHMARK_ARGS="$2"; shift ;;
     --stop) STOP=1 ;;
     --status) STATUS=1 ;;
     --site) SITE="$2"; shift ;;
     --no-dev-signin) NO_DEV=1 ;;
     --dir) DIR="$2"; shift ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
     *) echo "unknown option $1"; exit 1 ;;
   esac
   shift
@@ -199,6 +203,14 @@ fi
 if [ "$CHECK" = 1 ]; then
   say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
   "${COMPOSE[@]}" exec -T api python -m scripts.smoketest || warn "The smoke test did not pass; see the lines marked FAIL above."
+fi
+# --- 10. optional: the internal benchmark (course folders in data/, sets in eval/sets/) -------------
+if [ "$BENCHMARK" = 1 ]; then
+  say "Benchmark: every course in data/ with a question set; summary in eval/reports/ (hours on a CPU)..."
+  # run as this user, so the reports and the parse cache in the project folder stay yours
+  # shellcheck disable=SC2086
+  "${COMPOSE[@]}" run --rm --user "$(id -u):$(id -g)" benchmark python -m scripts.benchmark $BENCHMARK_ARGS \
+    || warn "The benchmark reported failed steps; see 'Failed' at the end of its output."
 fi
 # --- done -------------------------------------------------------------------------------------------
 echo

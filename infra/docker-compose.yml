@@ -71,6 +71,26 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # One-off: the internal benchmark (scripts.benchmark; `setup.ps1 -Benchmark`). Reads the course
+  # material from the project's data/ folder and the question sets from eval/sets/, writes the
+  # reports to eval/reports/ (all git-ignored: someone else's material). Never part of `up`.
+  benchmark:
+    <<: *backend
+    profiles: ["benchmark"]
+    command: ["python", "-m", "scripts.benchmark"]
+    restart: "no"
+    environment:
+      <<: *backend-env
+      HF_HOME: /cmpdata/hf  # the tokenizer and Docling models the worker already downloaded
+    volumes:
+      - ../data:/data
+      - ../eval:/eval
+      - cmp_data:/cmpdata
+      - ../config:/config:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   web:
     build:
       context: ../frontend

@@ -269,6 +269,10 @@ fixed, a 144-second answer now arrives in full.
 - **Models:** which model does which job is set in `config/models.yaml` (without a GPU) or
   `config/models.vllm.yaml` (with one). A new command, also used by the setup scripts, lists
   them and downloads whatever is missing.
+- **For the GPU computer:** a step-by-step guide ([docs/GPU-SETUP.md](docs/GPU-SETUP.md)) and
+  the whole benchmark in one command (`.\setup.ps1 -Benchmark`): it loads the courses, runs
+  every question set and writes one summary table per model. Tried here on the smaller course:
+  same search numbers as before, answers working.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
@@ -355,14 +359,19 @@ can install both itself. Windows (PowerShell):
 .\setup.ps1 -WithMoodle    # plus a local test Moodle connected to CMP
 .\setup.ps1 -WithTracing   # plus Langfuse: a record of every answer (http://127.0.0.1:3000)
 .\setup.ps1 -Check         # then the smoke test: 10 questions on a small course of our own
+.\setup.ps1 -Benchmark     # then the internal benchmark on the courses in data\ (see below)
 .\setup.ps1 -Stop          # stop everything (data is kept); -Status shows the containers
 ```
 
 Linux / macOS:
 
 ```bash
-./setup.sh                 # same switches: --install, --with-moodle, --with-tracing, --check, --stop, --status
+./setup.sh                 # same switches: --install, --with-moodle, --with-tracing, --check, --benchmark, --stop, --status
 ```
+
+**On a PC with an NVIDIA GPU**, follow [docs/GPU-SETUP.md](docs/GPU-SETUP.md): what to copy
+from the old computer (the course material is not in git), which model fits the card's memory,
+the smoke test, and the benchmark in one command (`.\setup.ps1 -Benchmark`) for comparing models.
 
 Run on its own (not from a clone), the script fetches the project first. It creates `.env`
 with random passwords, `SESSION_SECRET` and `ADMIN_TOKEN` (or adds what is missing), builds
