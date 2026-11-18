@@ -29,10 +29,25 @@ dev = [
 ingest = [
     "docling>=2.15",
     "pypdfium2>=4.30",  # PDF outline + text layer (already a Docling dependency)
+    # Docling's own dependencies, listed so [tool.uv.sources] can send Linux to the CPU index
+    "torch>=2.15",
+    "torchvision>=0.29",
 ]
 
 [tool.uv]
 package = false
+
+# Linux (the container images): CPU-only PyTorch, a few hundred MB instead of the CUDA build's
+# several GB. Docling's layout models run fine on CPU; the GPU, when there is one, serves the
+# language models (vLLM). Windows/macOS wheels on PyPI are CPU builds already.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 100

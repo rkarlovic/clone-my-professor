@@ -120,6 +120,7 @@ services:
       - ./moodle/config.php:/var/www/html/config.php:ro
       - ./moodle/setup_cmp.php:/opt/cmp/setup_cmp.php:ro
       - ./moodle/add_file.php:/opt/cmp/add_file.php:ro
+      - ./moodle/install.sh:/opt/cmp/install.sh:ro
     restart: unless-stopped
 
 volumes:

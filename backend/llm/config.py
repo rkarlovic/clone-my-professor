@@ -37,6 +37,9 @@ class RoleConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     version: str
+    # the model a self-hosted inference server (vLLM) must serve for this file's chat roles;
+    # the setup scripts read it from here, so model names stay in config (rule 8)
+    serve_model: str | None = None
     roles: dict[Role, RoleConfig]
     prompt_overrides: dict[str, dict[str, str]] = Field(default_factory=dict)
 

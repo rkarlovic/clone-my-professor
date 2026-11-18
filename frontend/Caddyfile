@@ -1,0 +1,57 @@
+# CMP web server (production image). HTTPS is mandatory on a real server (LTI and microphone
+# access need it): CMP_SITE_ADDRESS = the host name alone gets a Let's Encrypt certificate
+# automatically. A local trial uses http://localhost (browsers treat localhost as a secure
+# context, so there is no certificate warning); the setup scripts choose this.
+#
+#   CMP_SITE_ADDRESS     e.g. cmp.example.hr (HTTPS) or http://localhost (default)
+#   CMP_FRAME_ANCESTORS  LMS origins allowed to embed CMP, space-separated (LTI "embed")
+
+{
+	servers {
+		# An answer streams for minutes on a CPU (the AI notice, progress, then the checked answer;
+		# keep-alive comments every 15 s), so the limits are set well above that.
+		timeouts {
+			read_header 30s
+			read_body 2m
+			write 15m
+			idle 5m
+		}
+	}
+}
+
+{$CMP_SITE_ADDRESS:http://localhost} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data:; frame-ancestors 'self' {$CMP_FRAME_ANCESTORS:}"
+		-Server
+	}
+
+	handle /api/* {
+		reverse_proxy api:8000 {
+			# the chat streams server-sent events: pass them on at once, for as long as it takes
+			flush_interval -1
+			# Buffer small request bodies (a question) before passing them on: with the body sent on
+			# unbuffered, Caddy 2.11 cut a POST's streamed answer at exactly 60 s (a GET, or a
+			# buffered POST, streamed on). Larger bodies (uploads) still stream after the first 64 KB.
+			request_buffers 64k
+			transport http {
+				read_timeout 15m
+				write_timeout 15m
+			}
+		}
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		# compress the pages only: compressing /api would hold back the chat's event stream
+		encode zstd gzip
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

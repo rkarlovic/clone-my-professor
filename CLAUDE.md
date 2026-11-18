@@ -93,7 +93,7 @@ Two kinds of traffic, handled differently:
 ## Containers and deployment
 Everything runs in **Docker containers** (OCI images, so Podman/Kubernetes also work). Universities must be able to run CMP on their own infrastructure from the same images.
 - **Services:** `api` (FastAPI) and `worker` (Procrastinate) share **one backend image** with different start commands; `frontend` (static React build behind Caddy/nginx); `proxy` (Caddy or Traefik, **HTTPS mandatory** — LTI and microphone access require it); `postgres` (+ pgvector, persistent volume, backups); `vllm` (official image, GPU via NVIDIA Container Toolkit); `langfuse`. Dev only: `ollama`, `moodle`.
-- **Two Compose files:** `infra/docker-compose.dev.yml` (Ollama, test Moodle, source mounted with live reload) and `infra/docker-compose.prod.yml` (vLLM, proxy, no dev tools).
+- **Two Compose files:** `infra/docker-compose.dev.yml` (Postgres, Ollama, test Moodle, frontend dev server; backend on the host with live reload) and `infra/docker-compose.yml` (the installation: built images, Caddy proxy, no dev tools; + `infra/docker-compose.gpu.yml` for vLLM). The setup scripts `setup.ps1` / `setup.sh` drive the second one.
 - **Model weights are never baked into images**; they live in a mounted volume (download once, switch models without rebuilding).
 - **No secrets in images or Compose files**; use environment variables / `.env` (git-ignored) or a secret store.
 - **Pin every image version** (no `latest`); run containers as a non-root user; multi-stage Dockerfiles for small images.
@@ -130,7 +130,8 @@ eval/             internal benchmark sets (eval/sets/<subject>.yaml; sets made f
                   text, e.g. a teacher's own questions, in eval/sets/local/, git-ignored),
                   eval runner, reports (git-ignored)
 config/           models.yaml, settings
-infra/            docker-compose.dev.yml, docker-compose.prod.yml, proxy config
+infra/            docker-compose.dev.yml, docker-compose.yml (+ .gpu.yml), moodle/ (test Moodle)
+setup.ps1, setup.sh   one-script install/start (Windows / Linux + macOS)
 backend/Dockerfile, frontend/Dockerfile   (multi-stage, pinned base images)
 ```
 
@@ -937,7 +938,7 @@ Decisions made in step 1:
 - `npm audit`: 6 high, all one advisory (picomatch ReDoS, every version) in Vite/Vitest's file
   matching; dev tooling only, nothing reaches users; the offered fix downgrades Vitest, not
   applied. Re-check when Vite/Vitest update.
-- Not yet: the production image (static build behind Caddy) and HTTPS proxy, real sign-in,
+- Not yet (the production image and HTTPS proxy: step 4, part 7): real sign-in,
   LTI launch into the chat, notifications, the teacher's settings page.
 
 **Step 3, part 6: the check set after every upload (2026-11-17).**
@@ -1198,6 +1199,59 @@ LMS leaves the live version **at once**, without the teacher's approval (rule 5 
   `ADMIN_TOKEN` (.env, ≥ 32 chars) in `X-CMP-Admin-Token`; without it the admin API answers 403.
   Checked in the browser. Test included.
 
+**Step 4, part 7: containers for the installation and one-script setup (2026-11-18).**
+- `backend/Dockerfile` (multi-stage, `python:3.12.15-slim-bookworm` + uv 0.13.5, user `cmp`
+  uid 10001; one image for `api` (uvicorn, `--proxy-headers`) and `worker`; data under `/data`
+  (uploads, parse cache, LTI key, Hugging Face cache), `CMP_MODELS_CONFIG=/config/models.yaml`
+  from a read-only mount). torch/torchvision are listed in the `ingest` group and come from the
+  PyTorch CPU index on Linux (`[tool.uv.sources]`; listing them only transitively was ignored):
+  image 3.4 GB instead of ~10 GB with CUDA wheels. `frontend/Dockerfile`: node build →
+  `caddy:2.11.6-alpine` (user `cmp`) serving the pages and proxying `/api`.
+- `infra/docker-compose.yml` (project `cmp`): postgres, `migrate` (one-off `alembic upgrade
+  head`; api/worker wait for it), api, worker, web, ollama, infinity; profile `moodle`
+  (moodle-db, moodle). Only `web` is published (80/443). `infra/docker-compose.gpu.yml` adds
+  `vllm` (v0.32.0, NVIDIA device reservation, `--model ${VLLM_MODEL}`) and switches api/worker
+  to `config/models.vllm.yaml`; that file's `serve_model` (new optional field in
+  `llm/config.py`, ignored by the code) tells the scripts which model vLLM serves.
+- **Caddy** (`frontend/Caddyfile`): `CMP_SITE_ADDRESS` = a host name → HTTPS with an automatic
+  certificate; `http://localhost` for a local trial (a secure context for browsers, no
+  certificate warning; a self-signed localhost certificate would need a trusted root CA).
+  HSTS, nosniff, no referrer, CSP with `frame-ancestors 'self' $CMP_FRAME_ANCESTORS` (the LMS
+  origins allowed to embed CMP). Pages compressed, `/api` not (it would hold back the event
+  stream), `flush_interval -1`, timeouts well above an answer's length.
+  - **Bug found and fixed: answers cut at exactly 60 s.** With the request body passed to the
+    API unbuffered, Caddy 2.11 aborted a POST's streamed response after 60 s ("reading: context
+    canceled"); raising every server and transport timeout changed nothing. Reproduced with a
+    fake slow server: a GET and a POST with `request_buffers` streamed 120 s, the plain POST
+    and `stream_timeout` / `keepalive off` variants were cut at 60 s. Fix: `request_buffers
+    64k` (a question fits; uploads still stream after 64 KB). Live: three questions at once,
+    the slowest answer arrived complete after 144 s.
+- **Setup scripts** `setup.ps1` (Windows PowerShell 5.1+) and `setup.sh` (Linux/macOS), the
+  same steps: check Git and Docker (`-Install`/`--install`: winget, apt, dnf or Homebrew),
+  clone the repo when run alone, start Docker if needed, create `.env` from `.env.example` with
+  random passwords, `SESSION_SECRET`, `ADMIN_TOKEN` (or add missing keys only), set
+  `CMP_SITE` / `CMP_SCHEME` / `CMP_SITE_ADDRESS` and `AUTH_MODE` (dev only for localhost
+  without `-NoDevSignIn`), detect an NVIDIA GPU (`nvidia-smi`) → GPU file + `VLLM_MODEL`,
+  `up -d --build`, pull the Ollama models the active models file names (not `vision`), wait
+  for `/health`. `-WithMoodle`: install the test Moodle (`infra/moodle/install.sh`), run
+  `setup_cmp.php`, write `TEST_MOODLE_WS_TOKEN` and `CMP_FRAME_ANCESTORS` to `.env`, recreate
+  api/worker/web, register the platform inside the `api` container (JWKS and Web Services via
+  `http://moodle`). `-Stop`, `-Status`. Safe to run again.
+- Moodle inside the stack: CMP's containers reach it as `http://moodle`, browsers as
+  `http://127.0.0.1:$CMP_MOODLE_PORT`. `infra/moodle/config.php` answers requests for the
+  internal host name with wwwroot `http://moodle` (otherwise Moodle redirected certs.php to the
+  browser address); file links in the Web Services listing carry the public address, so
+  `MoodleClient(public_url=…)` rewrites that origin to the internal one and still refuses any
+  other origin (test included). `setup_cmp.php` updates the tool URLs of an existing tool.
+- The installed stack's test Moodle token is `TEST_MOODLE_WS_TOKEN`, not `MOODLE_WS_TOKEN`
+  (the dev Moodle's): in a dev checkout both stacks read the same `.env`, and the first
+  `-WithMoodle` run had overwritten the dev token.
+- **Checked on this laptop** (CPU only, models already in volumes via `CMP_OLLAMA_VOLUME` /
+  `CMP_HF_VOLUME`): `.\setup.ps1 -WithMoodle` from scratch ~150 s, a rerun 26 s; Moodle
+  teacher launch → link → Moodle sync over the internal network → 10 slides / 8 chunks in 17 s
+  → approve, publish → student chat answers; admin page and dev sign-in on http://localhost.
+  Not run: `setup.sh` on Linux/macOS, the GPU path (no GPU here), a real host name with HTTPS.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -1228,10 +1282,10 @@ Next:
 ## Commands
 _Update this section whenever the setup changes._
 
-**Current state (build step 1, see "Current status"):** the dev compose file has `postgres` (pgvector, PG 18), `ollama`
-and, under the `rerank` profile, `infinity` (bge-reranker-v2-m3, CPU). The backend runs on the
-host. `api`/`worker`/`frontend`/`langfuse`/`moodle` containers, the prod compose file and the
-Dockerfiles arrive in later build steps.
+**Development:** the dev compose file has `postgres` (pgvector, PG 18), `ollama`, under the
+`rerank` profile `infinity` (bge-reranker-v2-m3, CPU), and the `frontend` and `moodle`
+profiles; the backend (API, worker, scripts) runs on the host. The installation stack with
+every part in containers is at the end of this section.
 ```bash
 # one-time: create .env (git-ignored) from the template and change the passwords
 cp .env.example .env
@@ -1315,11 +1369,18 @@ MSYS_NO_PATHCONV=1 docker compose -f infra/docker-compose.dev.yml --env-file .en
     exec -u www-data moodle php /opt/cmp/add_file.php DAROV-DEMO /tmp/<file> [hidden]
 ```
 
-Planned (later build steps):
+The installation (everything in containers; see "Step 4, part 7"):
 ```bash
-docker compose -f infra/docker-compose.dev.yml up -d --build      # + api, worker, langfuse, moodle
-docker compose -f infra/docker-compose.prod.yml up -d             # vLLM on GPU, proxy with HTTPS
+.\setup.ps1 [-Install] [-WithMoodle] [-Site cmp.example.hr] [-NoDevSignIn] [-Stop] [-Status]
+./setup.sh  [--install] [--with-moodle] [--site cmp.example.hr] [--no-dev-signin] [--stop] [--status]
+#   by hand: docker compose -f infra/docker-compose.yml [-f infra/docker-compose.gpu.yml] \
+#            --env-file .env [--profile moodle] up -d --build
+#   in a dev checkout, reuse the dev stack's downloaded models instead of pulling them again:
+#   CMP_OLLAMA_VOLUME=cmp-dev_ollama_models CMP_HF_VOLUME=cmp-dev_hf_cache ./setup.sh
+#   the installed stack's test Moodle listens on CMP_MOODLE_PORT (default 8080; set 8081 when
+#   the dev Moodle also runs)
 ```
+Langfuse containers are not part of either stack yet.
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects
 as the app role (`DATABASE_URL`), which is not owner or superuser, so row-level security applies.

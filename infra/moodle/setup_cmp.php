@@ -45,6 +45,19 @@ if (!$type) {
     $config->lti_contentitem = 0;
     $typeid = lti_add_type($t, $config);
     $type = $DB->get_record('lti_types', ['id' => $typeid], '*', MUST_EXIST);
+} else {
+    // CMP's address may have changed (e.g. https -> http for a local trial): keep the tool current.
+    $urls = [
+        'toolurl' => "$cmp/api/lti/launch",
+        'publickeyset' => "$cmp/api/lti/jwks",
+        'initiatelogin' => "$cmp/api/lti/login",
+        'redirectionuris' => "$cmp/api/lti/launch",
+    ];
+    foreach ($urls as $name => $value) {
+        $DB->set_field('lti_types_config', 'value', $value, ['typeid' => $type->id, 'name' => $name]);
+    }
+    $DB->set_field('lti_types', 'baseurl', "$cmp/api/lti/launch", ['id' => $type->id]);
+    $DB->set_field('lti_types', 'tooldomain', parse_url($cmp, PHP_URL_HOST), ['id' => $type->id]);
 }
 
 // 2. Test users (passwords from .env).

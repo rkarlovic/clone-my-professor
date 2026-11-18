@@ -1,0 +1,209 @@
+<#
+.SYNOPSIS
+  Set up and start Clone My Professor (CMP) on Windows. Safe to run again: it updates and starts.
+
+.DESCRIPTION
+  Checks for Git and Docker (with -Install it installs them via winget), fetches the project if
+  needed, creates .env with random passwords and secrets, builds and starts all containers
+  (vLLM too when an NVIDIA GPU is present), downloads the AI models and waits until CMP answers.
+  With -WithMoodle it also starts a local test Moodle connected to CMP.
+
+.EXAMPLE
+  .\setup.ps1                  # check, set up, start
+  .\setup.ps1 -Install         # also install missing Git / Docker Desktop (needs admin rights)
+  .\setup.ps1 -WithMoodle      # plus a local test Moodle
+  .\setup.ps1 -Stop            # stop everything (data is kept)
+  .\setup.ps1 -Status
+#>
+param(
+    [switch]$Install,
+    [switch]$WithMoodle,
+    [switch]$Stop,
+    [switch]$Status,
+    [string]$Site = "localhost",
+    [switch]$NoDevSignIn,
+    [string]$Dir = "clone-my-professor"
+)
+
+$ErrorActionPreference = "Stop"
+$RepoUrl = "https://github.com/rkarlovic/clone-my-professor.git"
+
+function Say($text) { Write-Host "==> $text" -ForegroundColor Cyan }
+function Warn($text) { Write-Host "!!  $text" -ForegroundColor Yellow }
+function Fail($text) { Write-Host "xx  $text" -ForegroundColor Red; exit 1 }
+function Has($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
+
+function New-Secret([int]$bytes = 36) {
+    $b = New-Object byte[] $bytes
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+    ([Convert]::ToBase64String($b)).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+}
+
+# --- 1. tools --------------------------------------------------------------------------------
+function Ensure-Tool($cmd, $wingetId, $guide) {
+    if (Has $cmd) { return }
+    if (-not $Install) {
+        Warn "$cmd is missing. $guide"
+        Warn "Or run this script with -Install to install it automatically."
+        exit 1
+    }
+    if (-not (Has "winget")) { Fail "winget is not available; install $cmd by hand: $guide" }
+    Say "Installing $wingetId (winget)..."
+    winget install --id $wingetId -e --accept-source-agreements --accept-package-agreements
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    if (-not (Has $cmd)) { Fail "$cmd was installed but is not on PATH yet: open a new terminal and run this script again." }
+}
+
+Ensure-Tool "git" "Git.Git" "Download it from https://git-scm.com/download/win"
+Ensure-Tool "docker" "Docker.DockerDesktop" "Install Docker Desktop: https://docs.docker.com/desktop/setup/install/windows-install/ (it needs WSL 2; a restart may be required)"
+
+# --- 2. the project ----------------------------------------------------------------------------
+$Root = $PSScriptRoot
+if (-not (Test-Path (Join-Path $Root "infra\docker-compose.yml"))) {
+    if (-not (Test-Path (Join-Path $Dir "infra\docker-compose.yml"))) {
+        Say "Fetching the project into $Dir ..."
+        git clone $RepoUrl $Dir
+        if ($LASTEXITCODE -ne 0) { Fail "git clone failed" }
+    }
+    $Root = (Resolve-Path $Dir).Path
+}
+Set-Location $Root
+
+# --- 3. Docker running? -----------------------------------------------------------------------
+docker info *> $null
+if ($LASTEXITCODE -ne 0) {
+    $desktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+    if (Test-Path $desktop) {
+        Say "Starting Docker Desktop..."
+        Start-Process $desktop
+        for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 5
+            docker info *> $null
+            if ($LASTEXITCODE -eq 0) { break }
+        }
+    }
+    docker info *> $null
+    if ($LASTEXITCODE -ne 0) { Fail "Docker is not running. Start Docker Desktop and run this script again." }
+}
+
+# --- compose command ----------------------------------------------------------------------------
+$gpu = $false
+if (Has "nvidia-smi") { nvidia-smi *> $null; $gpu = ($LASTEXITCODE -eq 0) }
+$Compose = @("compose", "-f", "infra/docker-compose.yml")
+if ($gpu) { $Compose += @("-f", "infra/docker-compose.gpu.yml") }
+$Compose += @("--env-file", ".env")
+if ($WithMoodle) { $Compose += @("--profile", "moodle") }
+function Dc { & docker @Compose @args; if ($LASTEXITCODE -ne 0) { Fail "docker $($args -join ' ') failed" } }
+# A docker call whose failure is expected or tolerated (Windows PowerShell 5.1 turns a native
+# program's stderr into an error under "Stop"); returns its output as text.
+function DcQuiet {
+    $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { (& docker @Compose @args 2>&1 | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $old }
+}
+
+if ($Stop) { Say "Stopping CMP (data is kept)..."; & docker @Compose --profile moodle stop; exit 0 }
+if ($Status) { & docker @Compose --profile moodle ps; exit 0 }
+
+# --- 4. .env -------------------------------------------------------------------------------------
+$EnvPath = Join-Path $Root ".env"
+$utf8 = New-Object System.Text.UTF8Encoding $false
+if (-not (Test-Path $EnvPath)) {
+    Say "Creating .env with new random passwords and secrets..."
+    $text = [IO.File]::ReadAllText((Join-Path $Root ".env.example"))
+    foreach ($placeholder in @("change-me-owner", "change-me-app", "change-me-moodle-db")) {
+        $text = $text.Replace($placeholder, (New-Secret 24))
+    }
+    $text = $text.Replace("change-me-Admin-1!", (New-Secret 18) + "aA1!")
+    $text = $text.Replace("change-me-Test-1!", (New-Secret 18) + "aA1!")
+    [IO.File]::WriteAllText($EnvPath, $text, $utf8)
+}
+function Get-EnvValue($key) {
+    foreach ($line in [IO.File]::ReadAllLines($EnvPath)) {
+        if ($line -match "^$key=(.*)$") { return $Matches[1] }
+    }
+    return $null
+}
+function Set-EnvValue($key, $value) {
+    $lines = [System.Collections.Generic.List[string]]([IO.File]::ReadAllLines($EnvPath))
+    $done = $false
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match "^$key=") { $lines[$i] = "$key=$value"; $done = $true }
+    }
+    if (-not $done) { $lines.Add("$key=$value") }
+    [IO.File]::WriteAllText($EnvPath, ($lines -join "`n") + "`n", $utf8)
+}
+if (-not (Get-EnvValue "SESSION_SECRET")) { Set-EnvValue "SESSION_SECRET" (New-Secret 48) }
+if (-not (Get-EnvValue "ADMIN_TOKEN")) { Set-EnvValue "ADMIN_TOKEN" (New-Secret 36) }
+if (-not (Get-EnvValue "CMP_SITE")) { Set-EnvValue "CMP_SITE" $Site }
+# A real host name: HTTPS with an automatic certificate. localhost: plain http (a secure context
+# for browsers anyway), so a local trial shows no certificate warning.
+$siteName = Get-EnvValue "CMP_SITE"
+if ($siteName -eq "localhost") { Set-EnvValue "CMP_SCHEME" "http"; Set-EnvValue "CMP_SITE_ADDRESS" "http://localhost" }
+else { Set-EnvValue "CMP_SCHEME" "https"; Set-EnvValue "CMP_SITE_ADDRESS" $siteName }
+$scheme = Get-EnvValue "CMP_SCHEME"
+if (-not (Get-EnvValue "AUTH_MODE")) {
+    # Name-only sign-in is for trying CMP on this computer; a real server uses LTI / SSO only.
+    $mode = if ($Site -eq "localhost" -and -not $NoDevSignIn) { "dev" } else { "prod" }
+    Set-EnvValue "AUTH_MODE" $mode
+}
+if ($gpu) {
+    $serve = (Select-String -Path "config\models.vllm.yaml" -Pattern '^serve_model:\s*(\S+)').Matches[0].Groups[1].Value
+    Set-EnvValue "VLLM_MODEL" $serve
+}
+
+# --- 5. build and start --------------------------------------------------------------------------
+Say ("Building and starting CMP" + $(if ($gpu) { " (NVIDIA GPU found: vLLM included)" } else { " (no NVIDIA GPU: models run on the CPU)" }) + "...")
+Dc up -d --build
+
+# --- 6. models -----------------------------------------------------------------------------------
+$modelsFile = if ($gpu) { "config\models.vllm.yaml" } else { "config\models.yaml" }
+$needed = @(); $role = ""
+foreach ($line in Get-Content $modelsFile) {
+    if ($line -match '^  (\w+):\s*(#.*)?$') { $role = $Matches[1] }
+    elseif ($line -match '^\s+model:\s*ollama(_chat)?/(\S+)' -and $role -ne "vision") { $needed += $Matches[2] }
+}
+foreach ($m in ($needed | Select-Object -Unique)) {
+    Say "Downloading model $m (once; can take a while)..."
+    Dc exec -T ollama ollama pull $m
+}
+
+# --- 7. wait until CMP answers --------------------------------------------------------------------
+Say "Waiting for ${scheme}://$siteName ..."
+$ok = $false
+for ($i = 0; $i -lt 60; $i++) {
+    $code = & curl.exe -k -s -o NUL -w "%{http_code}" "${scheme}://$siteName/health"
+    if ($code -eq "200") { $ok = $true; break }
+    Start-Sleep -Seconds 5
+}
+if (-not $ok) { Warn "CMP did not answer yet; check with: .\setup.ps1 -Status" }
+
+# --- 8. optional: a local test Moodle ---------------------------------------------------------------
+if ($WithMoodle) {
+    $moodlePort = if (Get-EnvValue "CMP_MOODLE_PORT") { Get-EnvValue "CMP_MOODLE_PORT" } else { "8080" }
+    Say "Setting up the local Moodle (http://127.0.0.1:$moodlePort)..."
+    for ($i = 0; $i -lt 30; $i++) {  # wait until Moodle's web server answers
+        $code = & curl.exe -s -o NUL -w "%{http_code}" "http://127.0.0.1:$moodlePort/login/index.php"
+        if ($code -match "^(200|303)$") { break }
+        Start-Sleep -Seconds 3
+    }
+    $null = DcQuiet exec -T -u www-data moodle sh /opt/cmp/install.sh
+    $json = DcQuiet exec -T -u www-data moodle php /opt/cmp/setup_cmp.php
+    if ($json.IndexOf("{") -lt 0) { Fail "the Moodle setup script gave no result: $json" }
+    $info = ($json.Substring($json.IndexOf("{")) | ConvertFrom-Json)
+    Set-EnvValue "TEST_MOODLE_WS_TOKEN" $info.ws_token
+    Set-EnvValue "CMP_FRAME_ANCESTORS" "http://127.0.0.1:$moodlePort"
+    Dc up -d --force-recreate api worker web
+    Dc exec -T api python -m scripts.lti_platform add --name "Moodle (local test)" --issuer $info.issuer --client-id $info.client_id --auth-url $info.auth_url --jwks-url "http://moodle/mod/lti/certs.php" --deployment-id $info.deployment_id
+    Dc exec -T api python -m scripts.lti_platform ws --issuer $info.issuer --base-url "http://moodle" --token-env TEST_MOODLE_WS_TOKEN
+}
+
+# --- done -------------------------------------------------------------------------------------------
+Write-Host ""
+Say "CMP is running: ${scheme}://$siteName"
+if ((Get-EnvValue "AUTH_MODE") -eq "dev") { Write-Host "    Sign in on the start page with any name (test sign-in, this computer only)." }
+Write-Host "    Admin page: ${scheme}://$siteName/#/admin  (key: ADMIN_TOKEN in .env)"
+if ($WithMoodle) {
+    Write-Host "    Test Moodle: http://127.0.0.1:$moodlePort  users teacher1 / student1, password: MOODLE_TEST_PASSWORD in .env"
+    Write-Host "    Open the course 'Rad s darovitom djecom (Moodle demo)' and the activity 'Asistent (CMP)'."
+}
+Write-Host "    Stop: .\setup.ps1 -Stop    Start again: .\setup.ps1    Status: .\setup.ps1 -Status"

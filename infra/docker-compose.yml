@@ -1,0 +1,163 @@
+# CMP: the whole installation (pilot / an institution's own server / trying it locally).
+# Use the setup scripts (setup.ps1 / setup.sh) rather than running this by hand; they create .env,
+# pick the GPU file when there is an NVIDIA GPU, start everything and download the models.
+#
+#   docker compose -f infra/docker-compose.yml --env-file .env up -d --build
+#   # with an NVIDIA GPU (vLLM for the chat roles):
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.gpu.yml --env-file .env up -d --build
+#
+# Only the web server is published (80/443). Data lives in named volumes; no secrets in images.
+
+name: cmp
+
+x-backend: &backend
+  build:
+    context: ../backend
+  image: cmp-backend:local
+  env_file: ../.env
+  environment: &backend-env
+    DATABASE_URL: postgresql+psycopg://${CMP_APP_DB_USER}:${CMP_APP_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    DATABASE_OWNER_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    OLLAMA_API_BASE: http://ollama:11434
+    INFINITY_API_BASE: http://infinity:7997
+    VLLM_API_BASE: http://vllm:8000/v1
+    PUBLIC_URL: ${CMP_SCHEME:-https}://${CMP_SITE:-localhost}
+    CMP_MODELS_CONFIG: /config/${CMP_MODELS_FILE:-models.yaml}
+  volumes:
+    - cmp_data:/data
+    - ../config:/config:ro
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?set in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+      CMP_APP_DB_USER: ${CMP_APP_DB_USER:?set in .env}
+      CMP_APP_DB_PASSWORD: ${CMP_APP_DB_PASSWORD:?set in .env}
+    volumes:
+      - cmp_pgdata:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # One-off: bring the database schema up to date, then exit (api and worker wait for it).
+  migrate:
+    <<: *backend
+    command: ["sh", "-c", "cd /app && alembic upgrade head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *backend
+    command: ["python", "-m", "scripts.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../frontend
+    image: cmp-web:local
+    environment:
+      CMP_SITE_ADDRESS: ${CMP_SITE_ADDRESS:-https://localhost}
+      CMP_FRAME_ANCESTORS: ${CMP_FRAME_ANCESTORS:-}
+    ports:
+      - "${CMP_HTTP_PORT:-80}:80"
+      - "${CMP_HTTPS_PORT:-443}:443"
+    volumes:
+      - cmp_caddy:/data
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # Embeddings (and, without a GPU, the chat models too). Weights in a volume, never in images.
+  ollama:
+    image: ollama/ollama:0.40.11
+    volumes:
+      - cmp_ollama:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Reranker (bge-reranker-v2-m3), reached only via LiteLLM.
+  infinity:
+    image: michaelf34/infinity:0.0.78-cpu
+    platform: linux/amd64
+    command: ["v2", "--model-id", "BAAI/bge-reranker-v2-m3", "--port", "7997", "--engine", "torch"]
+    volumes:
+      - cmp_hf:/app/.cache
+    restart: unless-stopped
+
+  # A local Moodle to try CMP with (profile "moodle"; setup.ps1 / setup.sh --with-moodle).
+  # Browsers reach it at http://127.0.0.1:${CMP_MOODLE_PORT}; CMP's containers at http://moodle.
+  moodle-db:
+    profiles: ["moodle"]
+    image: pgvector/pgvector:0.8.6-pg18-trixie
+    environment:
+      POSTGRES_DB: moodle
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: ${MOODLE_DB_PASSWORD:-unset}
+    volumes:
+      - cmp_moodle_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodle -d moodle"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  moodle:
+    profiles: ["moodle"]
+    build:
+      context: ./moodle
+    image: cmp-moodle:local
+    depends_on:
+      moodle-db:
+        condition: service_healthy
+    environment:
+      MOODLE_DB_PASSWORD: ${MOODLE_DB_PASSWORD:-unset}
+      MOODLE_ADMIN_PASSWORD: ${MOODLE_ADMIN_PASSWORD:-unset}
+      MOODLE_TEST_PASSWORD: ${MOODLE_TEST_PASSWORD:-unset}
+      MOODLE_WWWROOT: http://127.0.0.1:${CMP_MOODLE_PORT:-8080}
+      MOODLE_INTERNAL_HOST: moodle  # how CMP's containers reach it (see moodle/config.php)
+      CMP_PUBLIC_URL: ${CMP_SCHEME:-https}://${CMP_SITE:-localhost}
+    ports:
+      - "127.0.0.1:${CMP_MOODLE_PORT:-8080}:80"
+    volumes:
+      - cmp_moodle_data:/var/www/moodledata
+      - ./moodle/config.php:/var/www/html/config.php:ro
+      - ./moodle/setup_cmp.php:/opt/cmp/setup_cmp.php:ro
+      - ./moodle/add_file.php:/opt/cmp/add_file.php:ro
+      - ./moodle/install.sh:/opt/cmp/install.sh:ro
+    restart: unless-stopped
+
+volumes:
+  cmp_pgdata:
+  cmp_data:  # uploads, parse cache, the LTI key, Hugging Face cache
+  cmp_caddy:  # HTTPS certificates
+  cmp_ollama:
+    name: ${CMP_OLLAMA_VOLUME:-cmp_ollama}  # override to reuse already downloaded models
+  cmp_hf:
+    name: ${CMP_HF_VOLUME:-cmp_hf}
+  cmp_moodle_pgdata:
+  cmp_moodle_data:

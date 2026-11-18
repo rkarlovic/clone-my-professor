@@ -5,9 +5,10 @@ using **only the teacher's approved materials** and following the teacher's teac
 Students reach it from their learning platform (Moodle/Merlin first, later Teams and Google
 Classroom) or from CMP's own web app. Content and users are primarily **Croatian**.
 
-> **Status (2026-11-17):** prototype. The clone already answers students' questions from one real
-> course with citations, and forwards what it can't answer to the teacher; it runs from the command
-> line on a laptop. There is no chat window, teacher dashboard or Moodle link yet.
+> **Status (2026-11-18):** prototype, ready to try. Teachers upload or sync material from
+> Moodle, review and publish it; students ask in a chat (also inside Moodle) and get answers
+> with citations, or their question goes to the teacher. One script installs and starts
+> everything: see [Install and run](#install-and-run-one-script).
 > See [Progress so far](#progress-so-far).
 
 ## Contents
@@ -32,8 +33,10 @@ Classroom) or from CMP's own web app. Content and users are primarily **Croatian
 **Where we are:** step 4 of 6. Step 1 (finding the right slide) and step 2 (writing answers)
 work; their remaining fixes wait for the pilot server and the teacher's review. Step 3, the
 product (upload, approval, chat, teacher's question queue, web pages, automatic test
-questions, teacher's settings), is done. Step 4 connects Moodle: opening CMP from a Moodle
-course works. Everything runs on a laptop without a
+questions, teacher's settings), is done. Step 4 connects Moodle: opening CMP from Moodle,
+syncing its files and removing what disappears from it all work; only Merlin (which needs
+SRCE's approval) is left. A setup script installs the whole thing on another computer.
+Everything runs on a laptop without a
 graphics card, so one answer takes about two minutes; on the pilot server it will take seconds.
 
 **Test course:** *Suvremene tehnike programiranja* (Java, one 945-page PDF of lecture slides),
@@ -217,7 +220,20 @@ sections whose new files go live straight away (everything else still waits for 
 history and handled questions are deleted after 180 days (configurable); and whoever runs the
 installation can register learning platforms on an admin page instead of the command line.
 
-**Next:** the pilot server (GPU, HTTPS, containers for everything), SRCE's approval for
+**Installing CMP on another computer (2026-11-18).** One script sets up and starts
+everything: `setup.ps1` on Windows, `setup.sh` on Linux and macOS. It checks for Git and
+Docker (and, if you ask it to, installs them), creates the settings file with fresh random
+passwords, builds and starts all parts of CMP in containers, downloads the AI models and
+waits until CMP answers. With an NVIDIA graphics card it also starts the fast model server
+(vLLM). An optional switch adds a test Moodle that is already connected to CMP. Running it
+again updates and restarts; nothing is lost. On a real server with its own name, CMP gets an
+HTTPS certificate by itself. Tried on this laptop from scratch: about 2.5 minutes with the
+test Moodle once the models were downloaded, then a Moodle teacher linked a course, Moodle
+material arrived, was published, and a student got an answer. One fault found on the way: the
+web server cut answers off after 60 seconds (answers take longer than that on a laptop);
+fixed, a 144-second answer now arrives in full.
+
+**Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
@@ -262,8 +278,8 @@ search, **0.89** with a context sentence per chunk (`--context`, the current def
 hard 16–17/19, teacher's exam questions 59/60 cited the expected slides; 6/6 out-of-scope and admin
 questions forwarded. Full comparisons and timings in CLAUDE.md.
 
-Not built yet: chat UI, teacher dashboard,
-LMS connectors, background jobs, Langfuse tracing.
+Not built yet: real sign-in for teachers outside Moodle (Microsoft/Google), Teams and Google
+Classroom connectors, Langfuse tracing.
 
 ## Architecture
 
@@ -283,6 +299,42 @@ BGE-M3, bge-reranker-v2-m3, LiteLLM, vLLM/Ollama, Procrastinate; React + Vite + 
 frontend (later). See [CLAUDE.md](CLAUDE.md) for the reasoning behind each choice.
 
 ## Getting started
+
+### Install and run (one script)
+
+To try CMP or run it on a server, use the setup script. It needs only Git and Docker and
+can install both itself. Windows (PowerShell):
+
+```powershell
+.\setup.ps1                # check, set up, start; prints what is missing
+.\setup.ps1 -Install       # also install missing Git / Docker Desktop (winget, admin rights)
+.\setup.ps1 -WithMoodle    # plus a local test Moodle connected to CMP
+.\setup.ps1 -Stop          # stop everything (data is kept); -Status shows the containers
+```
+
+Linux / macOS:
+
+```bash
+./setup.sh                 # same switches: --install, --with-moodle, --stop, --status
+```
+
+Run on its own (not from a clone), the script fetches the project first. It creates `.env`
+with random passwords, `SESSION_SECRET` and `ADMIN_TOKEN` (or adds what is missing), builds
+the images, starts the containers (vLLM as well when `nvidia-smi` finds a GPU), downloads the
+models named in the active models file and waits for `/health`. Then open
+<http://localhost>; on this computer you sign in with any name (test sign-in). The admin page
+is `http://localhost/#/admin` (key: `ADMIN_TOKEN` in `.env`). With `-WithMoodle` the test
+Moodle is at <http://127.0.0.1:8080> (`CMP_MOODLE_PORT`), users `teacher1` / `student1`,
+password `MOODLE_TEST_PASSWORD` in `.env`.
+
+On a server, pass its host name (`-Site cmp.example.hr` / `--site cmp.example.hr`): CMP then
+uses HTTPS with an automatic certificate and only LTI sign-in (`AUTH_MODE=prod`). Only the web
+server is published (ports 80/443); data lives in named Docker volumes. The stack is
+`infra/docker-compose.yml` (+ `infra/docker-compose.gpu.yml` for vLLM).
+
+### Development setup
+
+The rest of this section is for working on CMP's code (backend on the host, live reload).
 
 ### Prerequisites
 

@@ -1,0 +1,71 @@
+# CMP model configuration for a GPU server: chat roles on vLLM, embeddings and the vision role on
+# Ollama, the reranker on Infinity (CLAUDE.md "Model layer"). Selected with
+# CMP_MODELS_CONFIG=/config/models.vllm.yaml (the setup scripts do it when they find an NVIDIA
+# GPU). The answer model is NOT final: Qwen 3.5 vs Mistral Small 4 vs Gemma 4 is decided on the
+# golden sets with this setup (CLAUDE.md "Open questions"); changing it = edit `serve_model` and
+# the roles below, bump `version`, re-run the sets.
+
+version: "vllm-2026-11-18.1"
+serve_model: Qwen/Qwen3.5-9B  # what the vllm container serves (bf16 needs ~20 GB of GPU memory)
+
+roles:
+  answer:
+    kind: chat
+    model: hosted_vllm/Qwen/Qwen3.5-9B
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.2
+      # Same as the dev profile until the golden sets are re-run with thinking on (vLLM).
+      reasoning_effort: none
+
+  fast:
+    kind: chat
+    model: hosted_vllm/Qwen/Qwen3.5-9B
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none
+
+  check:
+    kind: chat
+    model: hosted_vllm/Qwen/Qwen3.5-9B
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none
+
+  context:
+    kind: chat
+    model: hosted_vllm/Qwen/Qwen3.5-9B
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none
+
+  vision:
+    kind: chat
+    model: ollama_chat/qwen3-vl:8b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  judge:
+    kind: chat
+    model: hosted_vllm/Qwen/Qwen3.5-9B
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none
+
+  embedding:
+    kind: embedding
+    model: ollama/bge-m3:567m
+    api_base: os.environ/OLLAMA_API_BASE
+    dimensions: 1024
+    min_score: 0.40
+    tokenizer: BAAI/bge-m3
+
+  reranker:
+    kind: rerank
+    model: infinity/BAAI/bge-reranker-v2-m3
+    api_base: os.environ/INFINITY_API_BASE

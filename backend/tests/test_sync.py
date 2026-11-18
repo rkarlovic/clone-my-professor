@@ -245,3 +245,30 @@ def test_auto_add_sections_publish_only_when_every_new_file_is_in_them(
     lms.files["3/p2.pdf"] = ("p2.pdf", b"%PDF p2", 1)
     r = run()
     assert r["status"] == "new_version" and r["published"] is False  # all wait for review
+
+
+def test_moodle_file_links_are_fetched_through_the_internal_address(monkeypatch) -> None:
+    import httpx
+
+    seen = []
+
+    class Resp:
+        headers = {"content-type": "application/pdf"}
+
+        def raise_for_status(self):
+            return self
+
+        def iter_bytes(self):
+            yield b"%PDF"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(httpx, "stream", lambda method, url, timeout: seen.append(url) or Resp())
+    client = MoodleClient("http://moodle", "tok", public_url="http://127.0.0.1:8080")
+    m = Material("1", "a.pdf", 4, 1, url="http://127.0.0.1:8080/webservice/pluginfile.php/5/a.pdf")
+    assert b"".join(client.download(m)) == b"%PDF"
+    assert seen[0].startswith("http://moodle/webservice/pluginfile.php/5/a.pdf?token=tok")

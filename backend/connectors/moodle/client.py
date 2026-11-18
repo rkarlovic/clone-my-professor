@@ -24,10 +24,14 @@ class MoodleError(RuntimeError):
 
 
 class MoodleClient:
-    def __init__(self, base_url: str, token: str) -> None:
+    def __init__(self, base_url: str, token: str, public_url: str | None = None) -> None:
+        """`base_url`: where CMP reaches Moodle. `public_url`: Moodle's own address (its
+        wwwroot, = the LTI issuer) when it differs, e.g. inside Docker; file links Moodle
+        returns with that address are fetched through `base_url` instead."""
         self.base = base_url.rstrip("/")
         self.token = token
         self._origin = urlsplit(self.base)[:2]
+        self._public = urlsplit(public_url.rstrip("/"))[:2] if public_url else None
 
     def _call(self, function: str, **params) -> object:
         r = httpx.post(
@@ -71,6 +75,8 @@ class MoodleClient:
 
     def download(self, material: Material) -> Iterator[bytes]:
         parts = urlsplit(material.url)
+        if self._public and parts[:2] == self._public:  # Moodle's public address -> ours
+            parts = parts._replace(scheme=self._origin[0], netloc=self._origin[1])
         if parts[:2] != self._origin:
             raise MoodleError("a file URL points outside the platform; not downloaded")
         query = dict(parse_qsl(parts.query)) | {"token": self.token}

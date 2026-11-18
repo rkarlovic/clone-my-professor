@@ -57,7 +57,7 @@ def connector_for(platform: LtiPlatform) -> Connector:
         raise SyncNotConfigured("Web Services are not set up for this platform")
     from connectors.moodle.client import MoodleClient  # the only kind so far
 
-    return MoodleClient(platform.ws_base_url, token)
+    return MoodleClient(platform.ws_base_url, token, public_url=platform.issuer)
 
 
 def unique_names(materials: list[Material]) -> dict[str, str]:

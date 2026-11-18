@@ -1,0 +1,45 @@
+# Added by the setup scripts when an NVIDIA GPU is present (needs the NVIDIA Container Toolkit):
+# vLLM serves the chat roles (config/models.vllm.yaml), Ollama keeps embeddings and uses the GPU.
+#
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.gpu.yml --env-file .env up -d
+
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.32.0
+    # VLLM_MODEL is set by the setup scripts from `serve_model` in config/models.vllm.yaml
+    command: ["--model", "${VLLM_MODEL:?run the setup script}", "--max-model-len", "16384", "--gpu-memory-utilization", "0.85"]
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - cmp_hf:/root/.cache/huggingface  # weights: downloaded once, kept in the volume
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 60
+    restart: unless-stopped
+
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  api:
+    environment:
+      CMP_MODELS_CONFIG: /config/models.vllm.yaml
+
+  worker:
+    environment:
+      CMP_MODELS_CONFIG: /config/models.vllm.yaml
