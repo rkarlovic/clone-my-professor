@@ -4,6 +4,7 @@ import { CheckQuestions } from "../components/CheckQuestions";
 import { LmsLinks } from "../components/LmsLinks";
 import { PersonaPanel } from "../components/PersonaSettings";
 import { QuestionQueue } from "../components/QuestionQueue";
+import { TeamPanel } from "../components/TeamPanel";
 import { UploadBox } from "../components/UploadBox";
 import { VersionRow } from "../components/VersionRow";
 import { href } from "../router";
@@ -14,7 +15,7 @@ export function CoursePage({ kbId }: { kbId: string }) {
   const [course, setCourse] = useState<Course | null>(null);
   const [versions, setVersions] = useState<Version[]>([]);
   const [files, setFiles] = useState<string[]>([]); // documents of the active version
-  const [tab, setTab] = useState<"materials" | "questions" | "checks" | "persona">("materials");
+  const [tab, setTab] = useState<"materials" | "questions" | "checks" | "persona" | "team">("materials");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -89,6 +90,9 @@ export function CoursePage({ kbId }: { kbId: string }) {
         <button role="tab" aria-selected={tab === "persona"} onClick={() => setTab("persona")}>
           Postavke asistenta
         </button>
+        <button role="tab" aria-selected={tab === "team"} onClick={() => setTab("team")}>
+          Nastavnici
+        </button>
       </div>
 
       {tab === "materials" ? (
@@ -110,6 +114,8 @@ export function CoursePage({ kbId }: { kbId: string }) {
         <QuestionQueue kbId={kbId} files={files} />
       ) : tab === "checks" ? (
         <CheckQuestions kbId={kbId} latest={latestCheck} />
+      ) : tab === "team" ? (
+        <TeamPanel kbId={kbId} />
       ) : (
         <PersonaPanel kbId={kbId} live={!!course?.active_version} />
       )}

@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from app.auth import TeacherDep
 from app.courses import _own_course
 from core.db import app_engine
 from core.models import LmsFile, LtiPlatform, PlatformContextMap
+from core.sync import sync_available
 from jobs import enqueue_sync
 
 router = APIRouter(prefix="/api/courses", tags=["lms"])
@@ -29,7 +30,10 @@ class LmsLinkOut(BaseModel):
     id: uuid.UUID
     platform: str
     context_title: str | None
-    sync_available: bool  # the platform has Web Services set up
+    kind: str = "moodle"  # moodle | teams | classroom
+    context_id: str = ""  # the course id the LMS launched with
+    sync_course_id: str | None = None  # the course id sync uses instead, if set
+    sync_available: bool  # material sync is set up for the platform
     sync_enabled: bool
     last_sync_at: datetime | None
     last_sync_status: str | None
@@ -41,6 +45,8 @@ class LmsLinkOut(BaseModel):
 class SyncSettingsIn(BaseModel):
     sync_enabled: bool
     auto_add_sections: list[str] | None = None  # None: unchanged
+    # Teams: the team's group id; Classroom: the course id ("" = use the LMS course id)
+    sync_course_id: str | None = Field(None, max_length=300)
 
 
 def _out(link: PlatformContextMap, platform: LtiPlatform, sections: list[str]) -> LmsLinkOut:
@@ -50,7 +56,10 @@ def _out(link: PlatformContextMap, platform: LtiPlatform, sections: list[str]) -
         id=link.id,
         platform=platform.name,
         context_title=link.context_title,
-        sync_available=bool(platform.ws_base_url and platform.ws_token_env),
+        sync_available=sync_available(platform),
+        kind=platform.kind,
+        sync_course_id=link.sync_course_id,
+        context_id=link.context_id,
         sync_enabled=link.sync_enabled,
         last_sync_at=link.last_sync_at,
         last_sync_status=link.last_sync_status,
@@ -85,13 +94,15 @@ def settings(
 ) -> LmsLinkOut:
     with Session(app_engine(), expire_on_commit=False) as s, s.begin():
         link, platform = _own_link(s, teacher.id, kb_id, link_id)
-        if body.sync_enabled and not (platform.ws_base_url and platform.ws_token_env):
+        if body.sync_enabled and not sync_available(platform):
             raise HTTPException(409, "material sync is not set up for this platform")
         link.sync_enabled = body.sync_enabled
         if body.auto_add_sections is not None:
             link.auto_add_sections = sorted(
                 {x.strip() for x in body.auto_add_sections if x.strip()}
             )
+        if body.sync_course_id is not None:
+            link.sync_course_id = body.sync_course_id.strip() or None
         sections = _sections(s, link.id)
     return _out(link, platform, sections)
 
@@ -100,7 +111,7 @@ def settings(
 def sync_now(kb_id: uuid.UUID, link_id: uuid.UUID, teacher: TeacherDep) -> dict:
     with Session(app_engine()) as s:
         _, platform = _own_link(s, teacher.id, kb_id, link_id)
-        if not (platform.ws_base_url and platform.ws_token_env):
+        if not sync_available(platform):
             raise HTTPException(409, "material sync is not set up for this platform")
     queued = enqueue_sync(link_id, kb_id)
     return {"queued": queued is not None}

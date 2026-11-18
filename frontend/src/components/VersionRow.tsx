@@ -207,6 +207,13 @@ export function CheckLine({ version: v }: { version: Version }) {
       Provjera: asistent pronalazi pravi slajd za {c.found_top5} od {c.questions} provjernih
       pitanja ({pct} %).
       {pct < 80 && " Pitanja koja promašuje označena su u kartici „Provjerna pitanja”."}
+      {c.collected && c.collected.questions > 0 && (
+        <>
+          {" "}
+          Stvarna pitanja studenata na koja ste odgovorili s izvorom: pravi slajd za{" "}
+          {c.collected.found_top5} od {c.collected.questions}.
+        </>
+      )}
     </p>
   );
 }

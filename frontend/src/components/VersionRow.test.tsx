@@ -92,3 +92,17 @@ test("the newest version offers removing a file; a removal says what it removed"
   expect(await screen.findAllByRole("button", { name: "Ukloni" })).toHaveLength(2);
   vi.unstubAllGlobals();
 });
+
+test("the check line also reports the collected real questions", () => {
+  const check = {
+    questions: 10,
+    found_top5: 9,
+    recall_at_5: 0.9,
+    written: 0,
+    misses: [],
+    seconds: 3,
+    collected: { questions: 4, found_top5: 3, recall_at_5: 0.75 },
+  };
+  buttons({ check_status: "done", check });
+  expect(screen.getByText(/Stvarna pitanja studenata .* za 3 od 4/)).toBeInTheDocument();
+});

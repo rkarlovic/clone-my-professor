@@ -7,23 +7,25 @@
 #   ./setup.sh                 check, set up, start
 #   ./setup.sh --install       also install missing Git / Docker (apt, dnf or Homebrew; sudo)
 #   ./setup.sh --with-moodle   plus a local test Moodle connected to CMP
+#   ./setup.sh --with-tracing  plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
 #   ./setup.sh --stop          stop everything (data is kept)
 #   ./setup.sh --status
 #   options: --site <host name> (default localhost)  --no-dev-signin  --dir <folder>
 set -euo pipefail
 
 REPO_URL="https://github.com/rkarlovic/clone-my-professor.git"
-INSTALL=0 WITH_MOODLE=0 STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
+INSTALL=0 WITH_MOODLE=0 WITH_TRACING=0 STOP=0 STATUS=0 SITE="localhost" NO_DEV=0 DIR="clone-my-professor"
 while [ $# -gt 0 ]; do
   case "$1" in
     --install) INSTALL=1 ;;
     --with-moodle) WITH_MOODLE=1 ;;
+    --with-tracing) WITH_TRACING=1 ;;
     --stop) STOP=1 ;;
     --status) STATUS=1 ;;
     --site) SITE="$2"; shift ;;
     --no-dev-signin) NO_DEV=1 ;;
     --dir) DIR="$2"; shift ;;
-    -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
     *) echo "unknown option $1"; exit 1 ;;
   esac
   shift
@@ -89,6 +91,9 @@ GPU=0
 if has nvidia-smi && nvidia-smi >/dev/null 2>&1; then GPU=1; fi
 COMPOSE=(docker compose -f infra/docker-compose.yml)
 [ "$GPU" = 1 ] && COMPOSE+=(-f infra/docker-compose.gpu.yml)
+TRACING=$WITH_TRACING
+[ -f .env ] && grep -q "^LANGFUSE_SALT=" .env && TRACING=1  # chosen before: stays on
+[ "$TRACING" = 1 ] && COMPOSE+=(-f infra/docker-compose.langfuse.yml)
 COMPOSE+=(--env-file .env)
 [ "$WITH_MOODLE" = 1 ] && COMPOSE+=(--profile moodle)
 
@@ -127,6 +132,18 @@ SCHEME="$(get_env CMP_SCHEME)"
 if [ -z "$(get_env AUTH_MODE)" ]; then
   # Name-only sign-in is for trying CMP on this computer; a real server uses LTI / SSO only.
   if [ "$SITE" = "localhost" ] && [ "$NO_DEV" = 0 ]; then set_env AUTH_MODE dev; else set_env AUTH_MODE prod; fi
+fi
+if [ "$TRACING" = 1 ]; then
+  # Langfuse's own passwords and the API keys CMP sends traces with (created in Langfuse on its
+  # first start). Only missing ones are added, so a rerun keeps existing data readable.
+  hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
+  for kv in "LANGFUSE_PUBLIC_KEY=pk-lf-$(hex 16)" "LANGFUSE_SECRET_KEY=sk-lf-$(hex 24)" \
+    "LANGFUSE_DB_PASSWORD=$(hex 18)" "LANGFUSE_SALT=$(hex 24)" "LANGFUSE_ENCRYPTION_KEY=$(hex 32)" \
+    "LANGFUSE_NEXTAUTH_SECRET=$(hex 32)" "LANGFUSE_CLICKHOUSE_PASSWORD=$(hex 18)" \
+    "LANGFUSE_MINIO_PASSWORD=$(hex 18)" "LANGFUSE_REDIS_PASSWORD=$(hex 18)" \
+    "LANGFUSE_ADMIN_PASSWORD=$(hex 12)Aa1!"; do
+    [ -n "$(get_env "${kv%%=*}")" ] || set_env "${kv%%=*}" "${kv#*=}"
+  done
 fi
 if [ "$GPU" = 1 ]; then
   set_env VLLM_MODEL "$(sed -n 's/^serve_model:[[:space:]]*\([^[:space:]]*\).*/\1/p' config/models.vllm.yaml)"
@@ -185,5 +202,9 @@ echo "    Admin page: $SCHEME://$SITE_NAME/#/admin  (key: ADMIN_TOKEN in .env)"
 if [ "$WITH_MOODLE" = 1 ]; then
   echo "    Test Moodle: http://127.0.0.1:$MOODLE_PORT  users teacher1 / student1, password: MOODLE_TEST_PASSWORD in .env"
   echo "    Open the course 'Rad s darovitom djecom (Moodle demo)' and the activity 'Asistent (CMP)'."
+fi
+if [ "$TRACING" = 1 ]; then
+  LF_PORT="$(get_env LANGFUSE_PORT)"; LF_USER="$(get_env LANGFUSE_ADMIN_EMAIL)"
+  echo "    Langfuse (traces): http://127.0.0.1:${LF_PORT:-3000}  user ${LF_USER:-admin@cmp.local}, password: LANGFUSE_ADMIN_PASSWORD in .env"
 fi
 echo "    Stop: ./setup.sh --stop    Start again: ./setup.sh    Status: ./setup.sh --status"

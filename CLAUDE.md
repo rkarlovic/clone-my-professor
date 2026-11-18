@@ -185,7 +185,9 @@ _Update this section when a build step's state changes._
 **Step 1 (retrieval spike): pipeline built and measured; experiments and teacher review pending.**
 **Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
 **Step 3 (product): started 2026-11-17 with direct upload, see the step 3 block below.**
-**Step 4 (Moodle connector): started 2026-11-17 with the LTI 1.3 launch, see below.**
+**Step 4 (Moodle connector): done except SRCE/Merlin access (needs their approval).**
+**Step 5 (Teams, Google Classroom): material-sync connectors built 2026-11-18 (launch via LTI
+1.3); not yet tried with a real tenant or Workspace. See "Step 4, part 8 + step 5" below.**
 
 Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
@@ -1252,6 +1254,88 @@ LMS leaves the live version **at once**, without the teacher's approval (rule 5 
   → approve, publish → student chat answers; admin page and dev sign-in on http://localhost.
   Not run: `setup.sh` on Linux/macOS, the GPU path (no GPU here), a real host name with HTTPS.
 
+**Step 4, part 8 + step 5: sign-in, course teams, tracing, collected questions, follow-ups,
+Teams and Classroom (2026-11-18).**
+- **Teacher sign-in with Microsoft/Google** (`core/sso.py`, `app/sso.py`, migration `0019`):
+  OIDC authorization code + PKCE on the server; state/nonce/verifier single-use (10 min,
+  `sso_login_state`, purged daily); id_token verified against the provider's JWKS (shared
+  `lti.signing_key`), audience, expiry, nonce; Microsoft multi-tenant issuer checked against
+  the token's `tid`; Google needs `email_verified` and, if set, the Workspace `hd`. **A provider
+  is offered only when limited to the institution**: Microsoft by a tenant id or
+  `SSO_ALLOWED_DOMAINS`, Google by `SSO_GOOGLE_HOSTED_DOMAIN` or allowed domains. Stored:
+  sha256("sso:"+issuer, sub) and the display name (colleagues see it); the e-mail is only read
+  for the domain check. Teachers only (students come through LTI, which names their course).
+  The session token reaches the pages like after an LTI launch (`#/lti?next=…&token=…`);
+  `next` is limited to the course list, a course or an invite. Start page shows the buttons
+  only when the server offers a provider (`GET /api/sso/providers`). Tested against a simulated
+  provider (PKCE, wrong audience/issuer/nonce/expiry, domains, replay, foreign `next`). **Not
+  tried with real Microsoft/Google apps** (needs the institution's app registrations).
+- **Course teams** (`core/team.py`, `app/team.py`, tab "Nastavnici"): list; owners create a
+  single-use invite link (7 days, only its sha256 stored, `course_invite`), remove teachers and
+  make owners; anyone may leave; a course always keeps an owner. An LMS instructor who is
+  removed joins again on the next launch (the LMS stays the source of truth for its own
+  instructors; the dialog says so). Checked in the browser (invite → second teacher joins).
+- **Langfuse tracing** (`llm/recording.py`, `core/tracing.py`): every model call inside an
+  answer is recorded (role, exact model id, prompt and reply, tokens, time; embeddings only as
+  a count for bulk calls) and `answer_question` sends **one trace per answer** with the
+  `kb_version_id`, persona version, model config version, prompt hashes, forward reason, check
+  verdicts, citations and timings, tagged by source (chat, persona_preview, persona_check,
+  eval, cli). Sent as **OpenTelemetry (OTLP/HTTP JSON)** to `/api/public/otel/v1/traces` with
+  `langfuse.*` + `gen_ai.*` attributes, no SDK; **Langfuse 4's older ingestion API is
+  deprecated** (and refuses new organisations), so it is not used. Background thread, never
+  breaks an answer; off unless `LANGFUSE_HOST`/`PUBLIC_KEY`/`SECRET_KEY` are set. Self-hosted
+  with `infra/docker-compose.langfuse.yml` (Langfuse 4.72.0 web + worker, Postgres 17,
+  ClickHouse 25.12.11.4, Redis 7.4.11, MinIO by digest; telemetry off; 127.0.0.1:3000 only;
+  organisation, project and API keys created on first start via `LANGFUSE_INIT_*`), on top of
+  either stack; `setup.ps1 -WithTracing` / `setup.sh --with-tracing` generate its secrets.
+  **Live**: two dev answers → 5 observations in Langfuse (root + fast 337 tokens 11.7 s +
+  embedding + answer 1,442 tokens 51 s), metadata incl. kb_version_id. Traces hold student
+  text (rule 9): they stay in the installation; set a retention period in the Langfuse project.
+- **Collected real questions** (`core/collected.py`, migration `0020`): a 👎 on an answer sends
+  the question with the assistant's answer (`teacher_question.ai_answer`) to the queue as
+  reason `flagged` (once per message; notifies the teachers; the student sees "poslano
+  nastavniku" and later the teacher's answer). Queue questions the teacher answered **with a
+  source** that is still in the version are the course's collected set; answered `admin`
+  questions are must-forward items. The check after every upload now also searches the
+  collected set (`check_report.collected`, shown on the version line), and
+  `scripts.collected` exports it in the golden-set format to
+  `eval/sets/local/<subject>.collected.yaml` for `scripts.evaluate[_answers] --set`
+  (evaluators now accept a source without a page = any page of that file). No student
+  reference is exported; the set follows the queue's retention (a rolling window).
+- **Follow-up questions** (`core/followup.py`, prompt `followup_rewrite`, `fast` role): a short
+  question (≤ 15 words) within 30 min of the student's previous exchange is rewritten to stand
+  on its own (last 2 exchanges, answers without citation markers); the pipeline answers the
+  rewritten question, unchanged otherwise (it was built and measured on single questions). A
+  rewrite that is empty, several lines, unchanged or far longer is not trusted. Stored as
+  `chat_message.standalone`; the teacher's queue gets the rewritten question. Stage
+  `followup` in the stream. Dev 4B live: "a tko je provodi?" → "Tko provodi identifikaciju
+  darovite djece?" (7–10 s each on CPU); a question that stands on its own stays as asked.
+  Rule 10: the golden sets have no conversation, so they cannot measure this prompt; a
+  follow-up set is needed before it is tuned.
+- **Chat limits**: `CHAT_QUESTIONS_PER_HOUR` (default 30) per student per course, counted from
+  stored exchanges (holds across API instances) → HTTP 429 with the minutes to wait; one
+  question at a time per student (per API process).
+- **Teams and Google Classroom connectors** (migration `0021`: `lti_platform.kind`,
+  `sync_config`, `platform_context_map.sync_course_id`). Both launch CMP through **LTI 1.3**
+  like Moodle (Teams Assignments and Classroom support LTI 1.3 tools), so only material sync is
+  new:
+  - `connectors/teams`: Microsoft Graph with the app's own identity (client credentials,
+    application permission that only reads files: `Files.Read.All` or `Sites.Selected`), delta
+    query over the team's SharePoint library (full enumeration each run; the core compares
+    size and time), channel = section, deleted items left out, download via Graph's redirect
+    (httpx drops the token on the cross-origin redirect).
+  - `connectors/classroom`: service account with domain-wide delegation acting as one
+    Workspace user, read-only scopes; Drive files attached to **published** materials and
+    assignments, topic = section; Google Docs → .docx and Slides → .pptx export (Drive
+    `version` as the change marker); key from an env var (JSON or a path).
+  - The sync course id defaults to the LTI context id; teachers can set the Graph group id /
+    Classroom course id in the LMS box. Admin page and `scripts.lti_platform sync` set the kind
+    and its non-secret settings; secrets only in env vars named by `ws_token_env`.
+  - Tested against simulated Graph and Google APIs (paging, exports, tokens only to their
+    hosts, deleted items, refusals). **Not tried with a real tenant or Workspace.**
+- Tests: backend 174 (new: `test_sso`, `test_tracing`, `test_collected`, `test_followup`,
+  `test_connectors`), frontend 22.
+
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
    above): chunk size settings; h11. Prompt variants only once the golden set can separate them. Slide 313 (outdated) is a content problem for the
@@ -1371,8 +1455,8 @@ MSYS_NO_PATHCONV=1 docker compose -f infra/docker-compose.dev.yml --env-file .en
 
 The installation (everything in containers; see "Step 4, part 7"):
 ```bash
-.\setup.ps1 [-Install] [-WithMoodle] [-Site cmp.example.hr] [-NoDevSignIn] [-Stop] [-Status]
-./setup.sh  [--install] [--with-moodle] [--site cmp.example.hr] [--no-dev-signin] [--stop] [--status]
+.\setup.ps1 [-Install] [-WithMoodle] [-WithTracing] [-Site cmp.example.hr] [-NoDevSignIn] [-Stop] [-Status]
+./setup.sh  [--install] [--with-moodle] [--with-tracing] [--site cmp.example.hr] [--no-dev-signin] [--stop] [--status]
 #   by hand: docker compose -f infra/docker-compose.yml [-f infra/docker-compose.gpu.yml] \
 #            --env-file .env [--profile moodle] up -d --build
 #   in a dev checkout, reuse the dev stack's downloaded models instead of pulling them again:
@@ -1380,7 +1464,24 @@ The installation (everything in containers; see "Step 4, part 7"):
 #   the installed stack's test Moodle listens on CMP_MOODLE_PORT (default 8080; set 8081 when
 #   the dev Moodle also runs)
 ```
-Langfuse containers are not part of either stack yet.
+
+Tracing (optional; Langfuse at http://127.0.0.1:3000, sign in as LANGFUSE_ADMIN_EMAIL /
+LANGFUSE_ADMIN_PASSWORD from .env; the setup scripts' tracing switch creates the LANGFUSE_* values):
+```bash
+docker compose -f infra/docker-compose.dev.yml -f infra/docker-compose.langfuse.yml --env-file .env up -d langfuse-web langfuse-worker
+#   the backend on the host sends traces when .env has LANGFUSE_HOST=http://127.0.0.1:3000 + the keys
+.\setup.ps1 -WithTracing          # installation: the same next to the containers (stays on)
+```
+
+Collected real questions and other platforms:
+```bash
+cd backend && uv run python -m scripts.collected --subject <folder or course name>
+#   -> eval/sets/local/<subject>.collected.yaml (student text: never commit); run with --set
+uv run python -m scripts.lti_platform sync --issuer <issuer> --kind teams \
+    --tenant-id <tenant> --client-id <app id> --secret-env CMP_TEAMS_SECRET
+uv run python -m scripts.lti_platform sync --issuer <issuer> --kind classroom \
+    --subject sync@school.edu --secret-env CMP_GOOGLE_SA_KEY
+```
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects
 as the app role (`DATABASE_URL`), which is not owner or superuser, so row-level security applies.

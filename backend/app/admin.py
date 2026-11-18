@@ -11,7 +11,7 @@ for whoever runs the installation.
 
 import secrets
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
@@ -47,6 +47,10 @@ class PlatformIn(BaseModel):
     ws_base_url: str | None = Field(None, max_length=500)
     # the NAME of the environment variable that holds the token; never the token itself
     ws_token_env: str | None = Field(None, max_length=100, pattern=r"^[A-Z][A-Z0-9_]*$")
+    kind: Literal["moodle", "teams", "classroom"] = "moodle"
+    # non-secret sync settings: Teams {"tenant_id", "client_id"}; Classroom {"subject"} (the
+    # Workspace user the service account acts as). Values are short strings, never secrets.
+    sync_config: dict[str, Annotated[str, Field(max_length=300)]] = {}
 
 
 class PlatformOut(PlatformIn):
@@ -67,12 +71,20 @@ def _out(p: LtiPlatform) -> PlatformOut:
         deployment_ids=list(p.deployment_ids or []),
         ws_base_url=p.ws_base_url,
         ws_token_env=p.ws_token_env,
+        kind=p.kind or "moodle",
+        sync_config=dict(p.sync_config or {}),
         ws_token_set=bool(p.ws_token_env and os.environ.get(p.ws_token_env)),
     )
 
 
+SYNC_KEYS = {"teams": {"tenant_id", "client_id"}, "classroom": {"subject"}, "moodle": set()}
+
+
 def _apply(p: LtiPlatform, body: PlatformIn) -> None:
-    for field, value in body.model_dump().items():
+    data = body.model_dump()
+    allowed = SYNC_KEYS[body.kind]
+    data["sync_config"] = {k: v.strip() for k, v in body.sync_config.items() if k in allowed}
+    for field, value in data.items():
         setattr(p, field, value)
 
 

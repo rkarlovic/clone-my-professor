@@ -50,7 +50,9 @@ def main() -> None:
 
 
 def show_answer(args: argparse.Namespace, kb_version_id) -> None:
-    a = answer_question(kb_version_id, args.question, k=args.k, rerank_candidates=args.rerank)
+    a = answer_question(
+        kb_version_id, args.question, k=args.k, rerank_candidates=args.rerank, source="cli"
+    )
     print("AI asistent (odgovara iz materijala kolegija):\n")  # rule 6: always disclosed
     print(a.text + "\n")
     if a.cited:

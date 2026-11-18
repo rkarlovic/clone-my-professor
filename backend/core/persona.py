@@ -10,6 +10,7 @@ check questions and the generic forward questions with it) -> active (the chat u
 previous one is retired) or rejected (too few forwarded or answered; the report says which).
 """
 
+import functools
 import random
 import time
 import uuid
@@ -165,7 +166,7 @@ def run_persona_check(persona_id: uuid.UUID, *, answer_fn: Callable | None = Non
     the generic questions must still be forwarded; the course's own questions still answered."""
     from core.answer import answer_question
 
-    answer_fn = answer_fn or answer_question
+    answer_fn = answer_fn or functools.partial(answer_question, source="persona_check")
     cfg = get_settings()
     started = time.time()
     with Session(app_engine()) as s:

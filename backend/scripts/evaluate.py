@@ -35,14 +35,14 @@ from retrieval.search import search
 
 class Source(BaseModel):
     document: str | None = None
-    page_or_slide: int
+    page_or_slide: int | None = None  # None: any page of the document (a teacher's source)
 
 
 class Question(BaseModel):
     id: str
     question: str
     type: Literal["answerable", "out_of_scope", "admin", "not_in_materials"]
-    difficulty: Literal["easy", "hard", "exam", "check"] = "easy"
+    difficulty: Literal["easy", "hard", "exam", "check", "collected"] = "easy"
     expected_sources: list[Source] = []
     reference_answer: str | None = None
     notes: str = ""
@@ -101,7 +101,7 @@ def main() -> None:
             (
                 i
                 for i, h in enumerate(hits, 1)
-                if any((h.file_name, p) in expected for p in h.pages)
+                if any((h.file_name, p) in expected for p in [*h.pages, None])
             ),
             None,
         )

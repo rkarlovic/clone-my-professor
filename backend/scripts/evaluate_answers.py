@@ -42,7 +42,7 @@ def main() -> None:
     ap.add_argument("--rerank", type=int, metavar="N")
     ap.add_argument("--set", type=Path, help="set file (default eval/sets/<subject>.yaml)")
     ap.add_argument("--ids", help="comma-separated question ids")
-    ap.add_argument("--difficulty", choices=["easy", "hard", "exam", "check"])
+    ap.add_argument("--difficulty", choices=["easy", "hard", "exam", "check", "collected"])
     ap.add_argument("--limit", type=int)
     ap.add_argument("--judge", action="store_true", help="grade answers with the `judge` role")
     ap.add_argument("--no-check", action="store_true", help="skip the live answer check")
@@ -72,6 +72,7 @@ def main() -> None:
                 lambda q=q: answer_question(
                     version.id,
                     q.question,
+                    source="eval",
                     k=args.k,
                     rerank_candidates=args.rerank,
                     check=not args.no_check,
@@ -160,7 +161,7 @@ def score(q: Question, a: Answer) -> dict:
         "type": q.type,
         "difficulty": q.difficulty,
         "question": q.question,
-        "expected_pages": sorted(p for _, p in expected),
+        "expected_pages": sorted(p for _, p in expected if p is not None),
         "forwarded": a.forwarded.value if a.forwarded else None,
         "scope": a.scope,
         "check": a.check,
@@ -172,8 +173,8 @@ def score(q: Question, a: Answer) -> dict:
         "trace": a.trace,
     }
     if q.type == "answerable":
-        cited = {(s.file_name, p) for s in a.cited for p in s.pages}
-        seen = {(s.file_name, p) for s in a.sources for p in s.pages}
+        cited = {(s.file_name, p) for s in a.cited for p in [*s.pages, None]}
+        seen = {(s.file_name, p) for s in a.sources for p in [*s.pages, None]}
         r["cited_expected"] = bool(cited & expected)
         r["retrieved_expected"] = bool(seen & expected)  # the answer had a chance
     return r

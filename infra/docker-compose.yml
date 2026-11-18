@@ -22,6 +22,8 @@ x-backend: &backend
     INFINITY_API_BASE: http://infinity:7997
     VLLM_API_BASE: http://vllm:8000/v1
     PUBLIC_URL: ${CMP_SCHEME:-https}://${CMP_SITE:-localhost}
+    # tracing (infra/docker-compose.langfuse.yml); off until LANGFUSE_PUBLIC/SECRET_KEY are set
+    LANGFUSE_HOST: http://langfuse-web:3000
     CMP_MODELS_CONFIG: /config/${CMP_MODELS_FILE:-models.yaml}
   volumes:
     - cmp_data:/data

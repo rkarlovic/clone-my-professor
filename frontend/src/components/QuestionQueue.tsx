@@ -106,6 +106,9 @@ function QueueRow({
       <p className="small muted">
         {new Date(item.created_at).toLocaleString("hr-HR")} · razlog: {item.reason_text}
       </p>
+      {item.ai_answer && (
+        <blockquote className="small muted">Asistent je odgovorio: {item.ai_answer}</blockquote>
+      )}
       {!editing && item.answer && (
         <div className="teacher-answer">
           <p>{item.answer}</p>

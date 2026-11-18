@@ -45,6 +45,8 @@ export interface CheckReport {
   recall_at_5: number | null;
   written: number;
   misses: { id: string; question: string; file_name: string; page: number }[];
+  // questions students really asked, answered by the teacher with a source
+  collected?: { questions: number; found_top5: number; recall_at_5: number | null };
   seconds: number;
 }
 
@@ -112,6 +114,7 @@ export interface QueueItem {
   answer: string | null;
   answer_sources: SourceRef[];
   answered_at: string | null;
+  ai_answer?: string | null; // what the assistant said (a question a student flagged with 👎)
 }
 
 export interface Citation {
@@ -245,6 +248,9 @@ export interface LmsLink {
   id: string;
   platform: string;
   context_title: string | null;
+  kind?: "moodle" | "teams" | "classroom";
+  context_id?: string;
+  sync_course_id?: string | null;
   sync_available: boolean;
   sync_enabled: boolean;
   last_sync_at: string | null;
@@ -256,10 +262,16 @@ export interface LmsLink {
 
 export const lmsApi = {
   links: (kb: string) => request<LmsLink[]>("teacher", `/api/courses/${kb}/lms`),
-  settings: (kb: string, id: string, sync_enabled: boolean, auto_add_sections?: string[]) =>
+  settings: (
+    kb: string,
+    id: string,
+    sync_enabled: boolean,
+    auto_add_sections?: string[],
+    sync_course_id?: string,
+  ) =>
     request<LmsLink>("teacher", `/api/courses/${kb}/lms/${id}`, {
       method: "PUT",
-      body: json({ sync_enabled, auto_add_sections }),
+      body: json({ sync_enabled, auto_add_sections, sync_course_id }),
     }),
   syncNow: (kb: string, id: string) =>
     request<{ queued: boolean }>("teacher", `/api/courses/${kb}/lms/${id}/sync`, { method: "POST" }),
@@ -292,6 +304,9 @@ export interface PlatformIn {
   deployment_ids: string[];
   ws_base_url: string | null;
   ws_token_env: string | null;
+  kind: "moodle" | "teams" | "classroom";
+  // Teams: tenant_id, client_id; Classroom: subject (the Workspace user the account acts as)
+  sync_config: Record<string, string>;
 }
 
 export interface Platform extends PlatformIn {
@@ -366,4 +381,48 @@ export const studentApi = {
   /** Ask a question; calls onEvent for each server-sent event until the answer or an error. */
   ask: (kb: string, question: string, onEvent: (e: SseEvent) => void) =>
     streamPost("student", `/api/chat/${kb}/messages`, { question }, onEvent),
+};
+
+// --- sign-in and the course's teachers ----------------------------------------------------
+
+export interface SsoProvider {
+  id: "microsoft" | "google";
+  label: string;
+}
+
+/** Start a Microsoft/Google sign-in; `next` is where the pages continue afterwards. */
+export const ssoLoginUrl = (provider: string, next = "teacher") =>
+  `/api/sso/${provider}/login?${new URLSearchParams({ next })}`;
+
+export interface Member {
+  teacher_id: string;
+  name: string;
+  role: "owner" | "teacher";
+  added_via: "owner" | "lti" | "invite";
+  added_at: string;
+  me: boolean;
+}
+
+export const teamApi = {
+  providers: async (): Promise<SsoProvider[]> => {
+    const r = await fetch("/api/sso/providers");
+    return r.ok ? r.json() : [];
+  },
+  members: (kb: string) => request<Member[]>("teacher", `/api/courses/${kb}/teachers`),
+  invite: (kb: string) =>
+    request<{ url: string; expires_at: string }>("teacher", `/api/courses/${kb}/invites`, {
+      method: "POST",
+    }),
+  remove: (kb: string, teacherId: string) =>
+    request<void>("teacher", `/api/courses/${kb}/teachers/${teacherId}`, { method: "DELETE" }),
+  makeOwner: (kb: string, teacherId: string) =>
+    request<Member[]>("teacher", `/api/courses/${kb}/teachers/${teacherId}/owner`, {
+      method: "POST",
+    }),
+  inviteInfo: (code: string) =>
+    request<{ kb_id: string; subject_name: string }>("teacher", `/api/invites/${code}`),
+  accept: (code: string) =>
+    request<{ kb_id: string; subject_name: string }>("teacher", `/api/invites/${code}/accept`, {
+      method: "POST",
+    }),
 };

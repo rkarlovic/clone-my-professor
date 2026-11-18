@@ -1,0 +1,151 @@
+# Langfuse (tracing), self-hosted next to CMP. Optional: add this file on top of either stack.
+#
+#   installation:  docker compose -f infra/docker-compose.yml -f infra/docker-compose.langfuse.yml --env-file .env up -d
+#                  (setup.ps1 -WithTracing / setup.sh --with-tracing do this and fill in .env)
+#   development:   docker compose -f infra/docker-compose.dev.yml -f infra/docker-compose.langfuse.yml --env-file .env up -d
+#                  and LANGFUSE_HOST=http://127.0.0.1:3000 in .env for the backend on the host
+#
+# Then http://127.0.0.1:${LANGFUSE_PORT:-3000} (only on this computer: on a server use an SSH
+# tunnel), sign in as LANGFUSE_ADMIN_EMAIL / LANGFUSE_ADMIN_PASSWORD. The organisation, project
+# and the API keys CMP uses are created on first start (LANGFUSE_INIT_*), so nothing is clicked.
+#
+# Layout follows Langfuse's own compose file for v4.72.0 (web + worker, Postgres, ClickHouse,
+# Redis, S3-compatible storage via MinIO). Traces hold student questions (rule 9): they stay in
+# these volumes on this server; set a data-retention period in the Langfuse project.
+# Telemetry to Langfuse's servers is off. Nothing is published beyond 127.0.0.1.
+
+x-langfuse-env: &langfuse-env
+  NEXTAUTH_URL: http://127.0.0.1:${LANGFUSE_PORT:-3000}
+  DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:?run setup with tracing or set in .env}@langfuse-db:5432/langfuse
+  SALT: ${LANGFUSE_SALT:?set in .env}
+  ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set in .env (64 hex characters)}
+  TELEMETRY_ENABLED: "false"
+  CLICKHOUSE_MIGRATION_URL: clickhouse://langfuse-clickhouse:9000
+  CLICKHOUSE_URL: http://langfuse-clickhouse:8123
+  CLICKHOUSE_USER: langfuse
+  CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:?set in .env}
+  CLICKHOUSE_CLUSTER_ENABLED: "false"
+  LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+  LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: langfuse
+  LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:?set in .env}
+  LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+  LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
+  LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: langfuse
+  LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_MINIO_PASSWORD:?set in .env}
+  LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://langfuse-minio:9000
+  LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+  LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
+  REDIS_HOST: langfuse-redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD:?set in .env}
+
+x-langfuse-depends: &langfuse-depends
+  langfuse-db:
+    condition: service_healthy
+  langfuse-minio:
+    condition: service_healthy
+  langfuse-redis:
+    condition: service_healthy
+  langfuse-clickhouse:
+    condition: service_healthy
+
+services:
+  langfuse-web:
+    image: langfuse/langfuse:4.72.0
+    depends_on: *langfuse-depends
+    environment:
+      <<: *langfuse-env
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set in .env}
+      LANGFUSE_INIT_ORG_ID: cmp
+      LANGFUSE_INIT_ORG_NAME: CMP
+      LANGFUSE_INIT_PROJECT_ID: cmp
+      LANGFUSE_INIT_PROJECT_NAME: CMP
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:?set in .env (pk-lf-…)}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:?set in .env (sk-lf-…)}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_ADMIN_EMAIL:-admin@cmp.local}
+      LANGFUSE_INIT_USER_NAME: CMP admin
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_ADMIN_PASSWORD:?set in .env}
+      AUTH_DISABLE_SIGNUP: "true"
+    ports:
+      - "127.0.0.1:${LANGFUSE_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  langfuse-worker:
+    image: langfuse/langfuse-worker:4.72.0
+    depends_on: *langfuse-depends
+    environment: *langfuse-env
+    restart: unless-stopped
+
+  langfuse-db:
+    image: postgres:17.10-alpine
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_DB: langfuse
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD:?set in .env}
+      TZ: UTC
+      PGTZ: UTC
+    volumes:
+      - langfuse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse -d langfuse"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  langfuse-clickhouse:
+    image: clickhouse/clickhouse-server:25.12.11.4
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: langfuse
+      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:?set in .env}
+    volumes:
+      - langfuse_clickhouse:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  langfuse-minio:
+    # Chainguard publishes only "latest"; pinned by digest (checked 2026-11-18)
+    image: cgr.dev/chainguard/minio@sha256:7618b82bba99aadd77fcf59eb6cfd89b4b8b8e01ac796c474d57a1c1abf17e79
+    entrypoint: sh
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" /data'
+    environment:
+      MINIO_ROOT_USER: langfuse
+      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_PASSWORD:?set in .env}
+    volumes:
+      - langfuse_minio:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  langfuse-redis:
+    image: redis:7.4.11-alpine
+    command: --requirepass ${LANGFUSE_REDIS_PASSWORD:?set in .env} --maxmemory-policy noeviction
+    volumes:
+      - langfuse_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${LANGFUSE_REDIS_PASSWORD}", "--no-auth-warning", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  langfuse_pgdata:
+  langfuse_clickhouse:
+  langfuse_clickhouse_logs:
+  langfuse_minio:
+  langfuse_redis:

@@ -52,12 +52,26 @@ class SyncNotConfigured(RuntimeError):
 def connector_for(platform: LtiPlatform) -> Connector:
     """The connector for a registered platform; the token is read from the environment
     variable the platform row names (secrets are never stored in the database)."""
-    token = os.environ.get(platform.ws_token_env or "", "")
-    if not platform.ws_base_url or not token:
-        raise SyncNotConfigured("Web Services are not set up for this platform")
-    from connectors.moodle.client import MoodleClient  # the only kind so far
+    secret = os.environ.get(platform.ws_token_env or "", "")
+    cfg = platform.sync_config or {}
+    kind = platform.kind or "moodle"
+    if kind == "teams":
+        if not (cfg.get("tenant_id") and cfg.get("client_id") and secret):
+            raise SyncNotConfigured("material sync is not set up for this Teams tenant")
+        from connectors.teams.client import TeamsClient
 
-    return MoodleClient(platform.ws_base_url, token, public_url=platform.issuer)
+        return TeamsClient(cfg["tenant_id"], cfg["client_id"], secret)
+    if kind == "classroom":
+        if not (cfg.get("subject") and secret):
+            raise SyncNotConfigured("material sync is not set up for this Google Workspace")
+        from connectors.classroom.client import ClassroomClient, load_key
+
+        return ClassroomClient(load_key(secret), cfg["subject"])
+    if not platform.ws_base_url or not secret:
+        raise SyncNotConfigured("Web Services are not set up for this platform")
+    from connectors.moodle.client import MoodleClient
+
+    return MoodleClient(platform.ws_base_url, secret, public_url=platform.issuer)
 
 
 def unique_names(materials: list[Material]) -> dict[str, str]:
@@ -93,7 +107,7 @@ def sync_course(
     with Session(app_engine()) as s:
         link = s.get(PlatformContextMap, map_id)
         platform = s.get(LtiPlatform, link.platform_id)
-        kb_id, course_id = link.kb_id, link.context_id
+        kb_id, course_id = link.kb_id, link.sync_course_id or link.context_id
         auto_sections = set(link.auto_add_sections or [])
         known = {
             f.external_id: f for f in s.scalars(select(LmsFile).where(LmsFile.map_id == map_id))
@@ -286,3 +300,16 @@ def _finish(map_id: uuid.UUID, report: dict) -> None:
         link.last_sync_at = datetime.now(UTC)
         link.last_sync_status = report.get("status")
         link.last_sync_report = report
+
+
+def sync_available(platform: LtiPlatform) -> bool:
+    """Whether material sync is configured for this platform (the secret itself is checked
+    when a sync runs, so a missing environment variable shows up in the sync report)."""
+    cfg = platform.sync_config or {}
+    if not platform.ws_token_env:
+        return False
+    if platform.kind == "teams":
+        return bool(cfg.get("tenant_id") and cfg.get("client_id"))
+    if platform.kind == "classroom":
+        return bool(cfg.get("subject"))
+    return bool(platform.ws_base_url)

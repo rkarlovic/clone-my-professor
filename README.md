@@ -6,8 +6,9 @@ Students reach it from their learning platform (Moodle/Merlin first, later Teams
 Classroom) or from CMP's own web app. Content and users are primarily **Croatian**.
 
 > **Status (2026-11-18):** prototype, ready to try. Teachers upload or sync material from
-> Moodle, review and publish it; students ask in a chat (also inside Moodle) and get answers
-> with citations, or their question goes to the teacher. One script installs and starts
+> Moodle (Teams and Google Classroom too), review and publish it; students ask in a chat (also
+> inside their learning platform) and get answers with citations, or their question goes to
+> the teacher. One script installs and starts
 > everything: see [Install and run](#install-and-run-one-script).
 > See [Progress so far](#progress-so-far).
 
@@ -233,8 +234,30 @@ material arrived, was published, and a student got an answer. One fault found on
 web server cut answers off after 60 seconds (answers take longer than that on a laptop);
 fixed, a 144-second answer now arrives in full.
 
+**Sign-in, teams, tracing, real questions, follow-ups, Teams and Classroom (2026-11-18).**
+- Teachers who use CMP outside Moodle can sign in with their school's Microsoft or Google
+  account; only accounts of that institution are let in. This was tested against a
+  simulated sign-in service; it needs the school's own app registration before it can be
+  tried for real.
+- A teacher can invite a colleague to a course with a one-time link, and owners can remove
+  teachers.
+- Whoever runs CMP can now see a record of every answer in Langfuse: which question, which
+  version of the material, which model, how long each step took and how many tokens it used.
+  It runs on the same server; tried on this laptop, the records arrive complete.
+- When a student marks an answer 👎, the question and the answer go to the teacher. Questions
+  the teacher answers while pointing to a slide become the course's own test questions, so
+  the test set grows from normal work; they are checked after every upload.
+- The chat now understands short follow-ups such as "a tko je provodi?" by turning them into
+  a full question first. Each student can ask up to 30 questions an hour per course, one at a
+  time.
+- Microsoft Teams and Google Classroom can open CMP the same way Moodle does (LTI). CMP can
+  also fetch their course files (Teams' files, Classroom's published materials; Google Docs
+  and Slides are converted). This was tested against simulated services only; it needs a
+  real school account to try.
+
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
-Merlin, and the teacher's review of the question sets; then Teams and Google Classroom. Fixes for the weak spots above (on both courses, answers
+Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
+with a real school's accounts. Fixes for the weak spots above (on both courses, answers
 stretched from a nearby slide are the main one) and the teacher's review of the question
 sets continue alongside. Choosing the final AI model waits for the pilot server.
 
@@ -270,7 +293,12 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Upload and approval (step 3) | Teacher API: create a course, upload files into a new draft version, follow its processing, approve and activate it (one live version, rollback), discard drafts; a background worker (Procrastinate queue in Postgres) processes new files and carries unchanged ones over; dev-only sign-in |
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
-| Tests | pytest: RLS isolation, model config, chunking, citations, answer checks, teacher queue |
+| Sign-in and teams | Teachers: Microsoft/Google (institution accounts only) or LTI; course invites, owners, removing teachers; students only through their learning platform |
+| Teams and Classroom (step 5) | Launch via LTI 1.3; material sync through Microsoft Graph (team files) and Classroom + Drive (published materials, Docs/Slides exported) |
+| Tracing | One Langfuse trace per answer with every model call (OpenTelemetry), self-hosted next to CMP; optional |
+| Collected questions | 👎 answers go to the teacher; queue answers with a source become the course's own test questions, checked after each upload and exportable for the evaluators |
+| Chat | Short follow-ups rewritten to stand on their own; 30 questions per hour per student and course, one at a time |
+| Tests | pytest (174): RLS isolation, model config, chunking, citations, answer checks, queue, LTI, sign-in, sync, connectors, tracing; Vitest (22) for the pages |
 
 Retrieval: recall@5 is **1.00** on easy questions and **0.84** on hard ones with plain dense
 search, **0.89** with a context sentence per chunk (`--context`, the current default version), and
@@ -278,8 +306,8 @@ search, **0.89** with a context sentence per chunk (`--context`, the current def
 hard 16–17/19, teacher's exam questions 59/60 cited the expected slides; 6/6 out-of-scope and admin
 questions forwarded. Full comparisons and timings in CLAUDE.md.
 
-Not built yet: real sign-in for teachers outside Moodle (Microsoft/Google), Teams and Google
-Classroom connectors, Langfuse tracing.
+Not tried for real yet (needs a school's accounts): Microsoft/Google sign-in, Teams and
+Classroom. Not built yet: the student profile (layer 3), voice and avatar (step 6).
 
 ## Architecture
 
@@ -309,13 +337,14 @@ can install both itself. Windows (PowerShell):
 .\setup.ps1                # check, set up, start; prints what is missing
 .\setup.ps1 -Install       # also install missing Git / Docker Desktop (winget, admin rights)
 .\setup.ps1 -WithMoodle    # plus a local test Moodle connected to CMP
+.\setup.ps1 -WithTracing   # plus Langfuse: a record of every answer (http://127.0.0.1:3000)
 .\setup.ps1 -Stop          # stop everything (data is kept); -Status shows the containers
 ```
 
 Linux / macOS:
 
 ```bash
-./setup.sh                 # same switches: --install, --with-moodle, --stop, --status
+./setup.sh                 # same switches: --install, --with-moodle, --with-tracing, --stop, --status
 ```
 
 Run on its own (not from a clone), the script fetches the project first. It creates `.env`

@@ -123,6 +123,7 @@ def preview(
         a = answer_question(
             version_id,
             body.question.strip(),
+            source="persona_preview",
             on_stage=on_stage,
             persona_text=text,
             persona_version=number,

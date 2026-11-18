@@ -83,6 +83,9 @@ export function LmsLinks({ kbId, onSynced }: { kbId: string; onSynced: () => voi
           </p>
           {l.sync_available ? (
             <>
+              {(l.kind === "teams" || l.kind === "classroom") && (
+                <SyncCourseId kbId={kbId} link={l} onSaved={load} onError={setError} />
+              )}
               <label className="inline">
                 <input type="checkbox" checked={l.sync_enabled} onChange={() => toggle(l)} />
                 Svakih 20 minuta provjeri ima li novih ili promijenjenih datoteka (nova verzija uvijek
@@ -132,5 +135,48 @@ export function LmsLinks({ kbId, onSynced }: { kbId: string; onSynced: () => voi
       ))}
       {error && <p className="error">{error}</p>}
     </section>
+  );
+}
+
+const ID_LABEL = {
+  teams: "ID tima (grupe) u Microsoft Teamsu",
+  classroom: "ID kolegija u Google Classroomu",
+};
+
+/** Teams/Classroom: the id material sync uses, if the platform's course id is not it. */
+function SyncCourseId({
+  kbId,
+  link,
+  onSaved,
+  onError,
+}: {
+  kbId: string;
+  link: LmsLink;
+  onSaved: () => void;
+  onError: (message: string) => void;
+}) {
+  const [value, setValue] = useState(link.sync_course_id ?? "");
+  const label = ID_LABEL[link.kind as "teams" | "classroom"];
+  return (
+    <form
+      className="row small"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        try {
+          await lmsApi.settings(kbId, link.id, link.sync_enabled, undefined, value.trim());
+          onSaved();
+        } catch (err) {
+          onError((err as Error).message);
+        }
+      }}
+    >
+      <label className="grow">
+        {label} (prazno: {link.context_id || "isti kao u sustavu"})
+        <input value={value} onChange={(e) => setValue(e.target.value)} maxLength={300} />
+      </label>
+      <button type="submit" className="secondary">
+        Spremi
+      </button>
+    </form>
   );
 }

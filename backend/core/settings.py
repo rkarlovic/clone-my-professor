@@ -31,6 +31,22 @@ class Settings(BaseSettings):
     # process (sessions then end when the API restarts). Set it in .env, never in code.
     session_secret: str | None = None
     session_hours: int = 8
+    # Teacher sign-in for CMP's own web app (core/sso.py). App registrations are made by the
+    # institution; secrets only in .env. A provider is offered only when limited to the
+    # institution: Microsoft by a tenant id (not "organizations"/"common") or allowed domains,
+    # Google by a Workspace domain or allowed domains. Redirect URI to register:
+    # <PUBLIC_URL>/api/sso/<microsoft|google>/callback
+    sso_microsoft_client_id: str | None = None
+    sso_microsoft_client_secret: str | None = None
+    sso_microsoft_tenant: str | None = None
+    sso_google_client_id: str | None = None
+    sso_google_client_secret: str | None = None
+    sso_google_hosted_domain: str | None = None
+    sso_allowed_domains: str | None = None  # comma-separated e-mail domains, e.g. "ffos.hr"
+    # Tracing (core/tracing.py): the installation's own Langfuse; off unless all three are set.
+    langfuse_host: str | None = None
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
     # Where the web pages are served (LTI launches redirect there).
     public_url: str = "http://127.0.0.1:5173"
     # The tool's own RSA key for its JWKS (LTI); created on first use if missing. A mounted
@@ -52,6 +68,8 @@ class Settings(BaseSettings):
     persona_check_questions: int = 10
     persona_min_forwarded: float = 0.9
     persona_min_answered: float = 0.7
+    # Questions per student per course per hour (0 = no limit); one at a time in any case.
+    chat_questions_per_hour: int = 30
 
     @property
     def jobs_conninfo(self) -> str:

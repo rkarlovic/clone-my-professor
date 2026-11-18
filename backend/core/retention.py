@@ -18,6 +18,7 @@ from core.models import (
     ChatMessage,
     LtiLoginState,
     Notification,
+    SsoLoginState,
     TeacherQuestion,
     TeacherQuestionStatus,
 )
@@ -60,6 +61,9 @@ def purge(now: datetime | None = None, days: int | None = None) -> dict[str, int
         ).rowcount
         done["lti_login_states"] = s.execute(
             delete(LtiLoginState).where(LtiLoginState.created_at < now - timedelta(days=1))
+        ).rowcount
+        done["sso_login_states"] = s.execute(
+            delete(SsoLoginState).where(SsoLoginState.created_at < now - timedelta(days=1))
         ).rowcount
     log.info("retention (%d days): %s", days, done)
     return done

@@ -24,6 +24,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.checkset import STYLES, Slide, eligible_slides, spread, write_question
+from core.collected import collected_questions
+from core.collected import found as found_rank
 from core.db import app_engine, kb_scope
 from core.models import CheckQuestion, Document, KbVersion, KnowledgeBase
 from core.settings import get_settings
@@ -144,7 +146,24 @@ def run_checks(
         else:
             misses.append({"id": str(qid), "question": text, "file_name": file_name, "page": page})
     n = len(questions)
+
+    # 3. the collected real questions (answered in the queue with a source): same search check
+    with Session(app_engine()) as s:
+        real = [c for c in collected_questions(s, kb_id, set(docs)) if c.kind == "answerable"]
+    real_found, real_misses = 0, []
+    for c in real:
+        if found_rank(c.sources, search_fn(version_id, c.question, K)):
+            real_found += 1
+        else:
+            real_misses.append({"id": str(c.id), "question": c.question})
+    collected = {
+        "questions": len(real),
+        "found_top5": real_found,
+        "recall_at_5": round(real_found / len(real), 3) if real else None,
+        "misses": real_misses[:MAX_MISSES_SHOWN],
+    }
     return {
+        "collected": collected,
         "questions": n,
         "found_top5": found,
         "recall_at_5": round(found / n, 3) if n else None,

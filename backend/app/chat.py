@@ -6,11 +6,13 @@
     POST /api/chat/messages/{id}/feedback       👍/👎 on one of the student's own answers
 
 The stream sends `notice` (rule 6: talking to an AI), then `stage` events while the clone works
-(scope, search, answer, check), then one `answer` event. Answer tokens are **not** streamed:
+(followup when a short follow-up is rewritten first, scope, search, answer, check), then one
+`answer` event. Answer tokens are **not** streamed:
 the answer check (rule 1) must pass before the student sees anything, so the whole answer is
 sent once it has. Keep-alive comments every 15 s hold the connection open on slow hardware.
 """
 
+import threading
 import uuid
 from datetime import datetime
 
@@ -25,7 +27,9 @@ from core.chat import (
     AI_NOTICE,
     MAX_QUESTION_CHARS,
     CourseNotLive,
+    TooManyQuestions,
     ask,
+    check_limit,
     course_for_students,
     history,
     set_feedback,
@@ -113,6 +117,19 @@ def my_messages(kb_id: uuid.UUID, student: StudentDep) -> list[MessageOut]:
         return [_out(m, answers.get(m.teacher_question_id)) for m in messages]
 
 
+# One question at a time per student and course (per API process; the hourly limit in
+# core/chat.py holds across processes): a second one while the first is answered is refused.
+_in_flight: set[tuple[uuid.UUID, str]] = set()
+_in_flight_lock = threading.Lock()
+
+
+def _limit_message(minutes: int) -> str:
+    return (
+        "Postavili ste mnogo pitanja u kratko vrijeme. Sljedeće pitanje možete postaviti za "
+        f"{minutes} min."
+    )
+
+
 @router.post("/{kb_id}/messages")
 def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> StreamingResponse:
     student.require(kb_id)
@@ -122,6 +139,16 @@ def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> St
     question = body.question.strip()
     if not question:
         raise HTTPException(422, "empty question")
+    with Session(app_engine()) as s:
+        try:
+            check_limit(s, kb_id, student.ref)
+        except TooManyQuestions as e:
+            raise HTTPException(429, _limit_message(e.minutes)) from e
+    key = (kb_id, student.ref)
+    with _in_flight_lock:
+        if key in _in_flight:
+            raise HTTPException(429, "Pričekajte odgovor na prethodno pitanje.")
+        _in_flight.add(key)
 
     def run(on_stage) -> dict:
         # Runs to the end even if the student closes the page, so a forwarded question
@@ -130,9 +157,19 @@ def post_question(kb_id: uuid.UUID, body: QuestionIn, student: StudentDep) -> St
             message = ask(kb_id, student.ref, question, on_stage=on_stage)
         except CourseNotLive as e:
             raise UserFacingError("the teacher has not published this course yet") from e
+        except TooManyQuestions as e:
+            raise UserFacingError(_limit_message(e.minutes)) from e
+        finally:
+            with _in_flight_lock:
+                _in_flight.discard(key)
         return _out(message).model_dump(mode="json")
 
-    return stream_answer(run)
+    try:
+        return stream_answer(run)
+    except Exception:
+        with _in_flight_lock:
+            _in_flight.discard(key)
+        raise
 
 
 @router.post("/messages/{message_id}/feedback")

@@ -103,6 +103,21 @@ Stil pitanja: {style}.
 Ako isječak nije gradivo o kojem bi student pitao (naslovna stranica, popis tema, kontakt,
 literatura), napiši samo PRESKOČI.
 Odgovori samo pitanjem.""",
+    # Chat follow-ups (`fast` role, core/followup.py): a question that leans on the previous
+    # exchange ("a što je s drugim?") becomes one that stands on its own; the answer pipeline
+    # itself still answers single questions, as it was built and measured.
+    "followup_rewrite": """Student razgovara s AI asistentom kolegija „{subject}".
+
+Prethodni razgovor:
+{history}
+
+Novo pitanje studenta: {question}
+
+Ako se novo pitanje oslanja na prethodni razgovor (npr. „a to?", „zašto?", „daj primjer",
+„a drugi?"), napiši ga ponovno tako da bude razumljivo bez razgovora: dodaj samo ono na što se
+odnosi, istim jezikom i stilom kao student, bez odgovora i bez novih pojmova.
+Ako je pitanje već razumljivo samo za sebe ili traži nešto drugo, prepiši ga nepromijenjeno.
+Odgovori samo pitanjem, u jednom retku.""",
     # Evaluation only (`judge` role): the answer is judged against the slides it cites, never
     # against a model-written reference answer (CLAUDE.md "Evaluation strategy").
     "judge": """Procjenjuješ odgovor AI asistenta studentu.

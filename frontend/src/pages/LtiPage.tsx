@@ -3,8 +3,9 @@ import { ltiApi, type LinkInfo } from "../api";
 import { setToken } from "../identity";
 import { href } from "../router";
 
-/** Where an LTI launch lands: #/lti?next=…&token=…. The token is kept for this tab and removed
- * from the address bar at once; then the user goes on to the chat, their course, or linking. */
+/** Where an LTI launch or a Microsoft/Google sign-in lands: #/lti?next=…&token=…. The token is
+ * kept for this tab and removed from the address bar at once; then the user goes on to the
+ * chat, their courses, a course, an invite, or linking. */
 export function LtiPage({ query }: { query: URLSearchParams }) {
   const next = query.get("next") ?? "";
   const token = query.get("token");
@@ -18,6 +19,8 @@ export function LtiPage({ query }: { query: URLSearchParams }) {
     setStored(true);
     if (next.startsWith("chat/")) window.location.hash = href.chat(next.slice(5));
     else if (next.startsWith("teacher/")) window.location.hash = href.course(next.slice(8));
+    else if (next === "teacher") window.location.hash = href.teacher;
+    else if (next.startsWith("invite/")) window.location.hash = href.invite(next.slice(7));
   }, [next, token]);
 
   if (!stored) return null;

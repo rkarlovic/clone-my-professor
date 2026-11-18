@@ -11,6 +11,8 @@ const EMPTY: PlatformIn = {
   deployment_ids: [],
   ws_base_url: null,
   ws_token_env: null,
+  kind: "moodle",
+  sync_config: {},
 };
 
 /** For whoever runs the installation: register learning platforms (LTI) and their Web
@@ -74,6 +76,23 @@ export function AdminPage() {
     </label>
   );
 
+  const KIND_LABEL = { moodle: "Moodle / Merlin", teams: "Microsoft Teams", classroom: "Google Classroom" };
+  const configField = (key: string, label: string, hint = "") => (
+    <label>
+      {label}
+      <input
+        value={editing!.body.sync_config[key] ?? ""}
+        onChange={(e) =>
+          setEditing(
+            (ed) =>
+              ed && { ...ed, body: { ...ed.body, sync_config: { ...ed.body.sync_config, [key]: e.target.value } } },
+          )
+        }
+        placeholder={hint}
+      />
+    </label>
+  );
+
   return (
     <main className="page">
       <nav className="crumbs">
@@ -121,8 +140,11 @@ export function AdminPage() {
             <ul className="list">
               {platforms.map((p) => (
                 <li key={p.id}>
-                  <strong>{p.name}</strong> <span className="small muted">{p.issuer}</span>{" "}
-                  {p.ws_base_url ? (
+                  <strong>{p.name}</strong>{" "}
+                  <span className="small muted">
+                    {KIND_LABEL[p.kind ?? "moodle"]} · {p.issuer}
+                  </span>{" "}
+                  {p.ws_token_env ? (
                     <span className={`badge ${p.ws_token_set ? "ok" : "bad"}`}>
                       preuzimanje materijala {p.ws_token_set ? "postavljeno" : `nedostaje ${p.ws_token_env}`}
                     </span>
@@ -140,13 +162,55 @@ export function AdminPage() {
             <form className="card persona-form" onSubmit={save}>
               <h2>{editing.id ? "Uredi sustav" : "Novi sustav"}</h2>
               {field("name", "Naziv", "npr. Merlin")}
+              <label>
+                Vrsta sustava
+                <select
+                  value={editing.body.kind}
+                  onChange={(e) =>
+                    setEditing(
+                      (ed) => ed && { ...ed, body: { ...ed.body, kind: e.target.value as PlatformIn["kind"] } },
+                    )
+                  }
+                >
+                  {Object.entries(KIND_LABEL).map(([k, v]) => (
+                    <option key={k} value={k}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {field("issuer", "Issuer (platform ID)", "https://moodle.example.hr")}
               {field("client_id", "Client ID")}
               {field("auth_login_url", "Authentication request URL", ".../mod/lti/auth.php")}
               {field("jwks_url", "Public keyset URL", ".../mod/lti/certs.php")}
               {field("deployment_ids", "Deployment ID-jevi (zarezom)", "1")}
-              {field("ws_base_url", "Web Services adresa (neobavezno)", "https://moodle.example.hr")}
-              {field("ws_token_env", "Ime varijable s tokenom (ne token!)", "MOODLE_WS_TOKEN")}
+              {editing.body.kind === "moodle" && (
+                <>
+                  {field("ws_base_url", "Web Services adresa (neobavezno)", "https://moodle.example.hr")}
+                  {field("ws_token_env", "Ime varijable s tokenom (ne token!)", "MOODLE_WS_TOKEN")}
+                </>
+              )}
+              {editing.body.kind === "teams" && (
+                <>
+                  <p className="small muted">
+                    Preuzimanje materijala iz Teamsa: aplikacija u Entra ID-u ustanove s dopuštenjem samo
+                    za čitanje datoteka (Files.Read.All ili Sites.Selected) i suglasnošću administratora.
+                  </p>
+                  {configField("tenant_id", "Tenant ID (Entra ID)")}
+                  {configField("client_id", "Application (client) ID aplikacije za čitanje")}
+                  {field("ws_token_env", "Ime varijable s tajnom aplikacije (ne tajna!)", "CMP_TEAMS_SECRET")}
+                </>
+              )}
+              {editing.body.kind === "classroom" && (
+                <>
+                  <p className="small muted">
+                    Preuzimanje iz Classrooma: servisni račun s delegiranjem na razini domene i samo
+                    opsezima za čitanje (Classroom i Drive), koje odobrava administrator Workspacea.
+                  </p>
+                  {configField("subject", "Korisnik u čije ime račun čita", "sync@skola.hr")}
+                  {field("ws_token_env", "Ime varijable s ključem računa (JSON ili putanja)", "CMP_GOOGLE_SA_KEY")}
+                </>
+              )}
               <div className="row actions">
                 <button type="submit">Spremi</button>
                 <button type="button" className="secondary" onClick={() => setEditing(null)}>

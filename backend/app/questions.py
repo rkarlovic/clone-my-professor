@@ -30,6 +30,7 @@ REASONS = {
     "low_score": "u materijalima nije pronađeno ništa dovoljno blisko",
     "no_source": "model nije našao odgovor u materijalima",
     "failed_check": "provjera odgovora nije prošla",
+    "flagged": "student je označio da mu odgovor asistenta nije pomogao",
 }
 
 
@@ -53,6 +54,7 @@ class QuestionOut(BaseModel):
     answer: str | None
     answer_sources: list[SourceIn]
     answered_at: datetime | None
+    ai_answer: str | None = None  # what the assistant said, for a flagged answer
 
 
 def _out(q: TeacherQuestion) -> QuestionOut:
@@ -66,6 +68,7 @@ def _out(q: TeacherQuestion) -> QuestionOut:
         answer=q.answer,
         answer_sources=[SourceIn(**s) for s in q.answer_sources],
         answered_at=q.answered_at,
+        ai_answer=q.ai_answer,
     )
 
 

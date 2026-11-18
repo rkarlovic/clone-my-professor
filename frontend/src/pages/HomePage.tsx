@@ -1,4 +1,5 @@
 import { DevSignIn } from "../components/DevSignIn";
+import { SsoButtons } from "../components/SsoButtons";
 import { href } from "../router";
 
 export function HomePage() {
@@ -10,6 +11,7 @@ export function HomePage() {
       </p>
       <section className="card">
         <h2>Nastavnik</h2>
+        <SsoButtons />
         <DevSignIn role="teacher" />
         <p>
           <a href={href.teacher}>Moji kolegiji →</a>
@@ -23,8 +25,9 @@ export function HomePage() {
         </p>
       </section>
       <p className="muted small">
-        Razvojna verzija: prijava je samo ime, bez lozinke. Prava prijava (Microsoft/Google, LTI)
-        dolazi prije pilota.
+        Nastavnici se prijavljuju računom ustanove (Microsoft/Google) ili otvaraju asistenta iz
+        sustava za učenje; studenti samo iz sustava za učenje. Razvojna prijava (samo ime) radi
+        samo na probnoj instalaciji.
       </p>
       <p className="small">
         <a href="#/admin">Administracija</a> (za one koji vode instalaciju)

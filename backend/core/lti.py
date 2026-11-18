@@ -155,12 +155,17 @@ def _platform_keys(url: str, refresh: bool = False) -> dict:
     return keys
 
 
-def _signing_key(platform: LtiPlatform, kid: str | None):
+def signing_key(jwks_url: str, kid: str | None):
+    """The public key with this key id from a key set (also used for SSO, core/sso.py)."""
     for refresh in (False, True):  # a new key id: fetch the set again once
-        for jwk in _platform_keys(platform.jwks_url, refresh).get("keys", []):
+        for jwk in _platform_keys(jwks_url, refresh).get("keys", []):
             if kid is None or jwk.get("kid") == kid:
                 return jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
     raise LtiError("the platform's signing key was not found")
+
+
+def _signing_key(platform: LtiPlatform, kid: str | None):
+    return signing_key(platform.jwks_url, kid)
 
 
 def user_ref(issuer: str, sub: str) -> str:

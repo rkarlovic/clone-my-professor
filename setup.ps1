@@ -6,18 +6,21 @@
   Checks for Git and Docker (with -Install it installs them via winget), fetches the project if
   needed, creates .env with random passwords and secrets, builds and starts all containers
   (vLLM too when an NVIDIA GPU is present), downloads the AI models and waits until CMP answers.
-  With -WithMoodle it also starts a local test Moodle connected to CMP.
+  With -WithMoodle it also starts a local test Moodle connected to CMP; with -WithTracing,
+  Langfuse for tracing every answer (once chosen, it stays on in later runs).
 
 .EXAMPLE
   .\setup.ps1                  # check, set up, start
   .\setup.ps1 -Install         # also install missing Git / Docker Desktop (needs admin rights)
   .\setup.ps1 -WithMoodle      # plus a local test Moodle
+  .\setup.ps1 -WithTracing     # plus Langfuse: a trace of every answer (http://127.0.0.1:3000)
   .\setup.ps1 -Stop            # stop everything (data is kept)
   .\setup.ps1 -Status
 #>
 param(
     [switch]$Install,
     [switch]$WithMoodle,
+    [switch]$WithTracing,
     [switch]$Stop,
     [switch]$Status,
     [string]$Site = "localhost",
@@ -92,6 +95,8 @@ if (Has "nvidia-smi") { nvidia-smi *> $null; $gpu = ($LASTEXITCODE -eq 0) }
 $Compose = @("compose", "-f", "infra/docker-compose.yml")
 if ($gpu) { $Compose += @("-f", "infra/docker-compose.gpu.yml") }
 $Compose += @("--env-file", ".env")
+$tracing = $WithTracing -or ((Test-Path ".env") -and (Select-String -Path ".env" -Pattern "^LANGFUSE_SALT=" -Quiet))
+if ($tracing) { $Compose = $Compose[0..2] + @("-f", "infra/docker-compose.langfuse.yml") + $Compose[3..($Compose.Length - 1)] }
 if ($WithMoodle) { $Compose += @("--profile", "moodle") }
 function Dc { & docker @Compose @args; if ($LASTEXITCODE -ne 0) { Fail "docker $($args -join ' ') failed" } }
 # A docker call whose failure is expected or tolerated (Windows PowerShell 5.1 turns a native
@@ -145,6 +150,24 @@ if (-not (Get-EnvValue "AUTH_MODE")) {
     # Name-only sign-in is for trying CMP on this computer; a real server uses LTI / SSO only.
     $mode = if ($Site -eq "localhost" -and -not $NoDevSignIn) { "dev" } else { "prod" }
     Set-EnvValue "AUTH_MODE" $mode
+}
+if ($tracing) {
+    # Langfuse's own passwords and the API keys CMP sends traces with (created in Langfuse on
+    # its first start). Only missing ones are added, so a rerun keeps existing data readable.
+    $hex = { param($n) $b = New-Object byte[] $n; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); -join ($b | ForEach-Object { $_.ToString("x2") }) }
+    $want = [ordered]@{
+        LANGFUSE_PUBLIC_KEY = "pk-lf-" + (& $hex 16)
+        LANGFUSE_SECRET_KEY = "sk-lf-" + (& $hex 24)
+        LANGFUSE_DB_PASSWORD = (& $hex 18)
+        LANGFUSE_SALT = (& $hex 24)
+        LANGFUSE_ENCRYPTION_KEY = (& $hex 32)
+        LANGFUSE_NEXTAUTH_SECRET = (& $hex 32)
+        LANGFUSE_CLICKHOUSE_PASSWORD = (& $hex 18)
+        LANGFUSE_MINIO_PASSWORD = (& $hex 18)
+        LANGFUSE_REDIS_PASSWORD = (& $hex 18)
+        LANGFUSE_ADMIN_PASSWORD = (& $hex 12) + "Aa1!"
+    }
+    foreach ($k in $want.Keys) { if (-not (Get-EnvValue $k)) { Set-EnvValue $k $want[$k] } }
 }
 if ($gpu) {
     $serve = (Select-String -Path "config\models.vllm.yaml" -Pattern '^serve_model:\s*(\S+)').Matches[0].Groups[1].Value
@@ -205,5 +228,10 @@ Write-Host "    Admin page: ${scheme}://$siteName/#/admin  (key: ADMIN_TOKEN in 
 if ($WithMoodle) {
     Write-Host "    Test Moodle: http://127.0.0.1:$moodlePort  users teacher1 / student1, password: MOODLE_TEST_PASSWORD in .env"
     Write-Host "    Open the course 'Rad s darovitom djecom (Moodle demo)' and the activity 'Asistent (CMP)'."
+}
+if ($tracing) {
+    $lfPort = Get-EnvValue "LANGFUSE_PORT"; if (-not $lfPort) { $lfPort = "3000" }
+    $lfUser = Get-EnvValue "LANGFUSE_ADMIN_EMAIL"; if (-not $lfUser) { $lfUser = "admin@cmp.local" }
+    Write-Host "    Langfuse (traces): http://127.0.0.1:$lfPort  user $lfUser, password: LANGFUSE_ADMIN_PASSWORD in .env"
 }
 Write-Host "    Stop: .\setup.ps1 -Stop    Start again: .\setup.ps1    Status: .\setup.ps1 -Status"

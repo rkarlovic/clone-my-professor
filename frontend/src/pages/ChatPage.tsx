@@ -6,6 +6,7 @@ import { isSignedIn } from "../identity";
 
 // What the student sees while the clone works (the answer is shown only after its check).
 export const STAGES: Record<string, string> = {
+  followup: "Povezujem s prethodnim pitanjem…",
   scope: "Provjeravam pitanje…",
   search: "Tražim u materijalima kolegija…",
   answer: "Pišem odgovor…",
@@ -201,6 +202,9 @@ function Exchange({ message: m, onRate }: { message: Message; onRate: (helpful: 
           <p className="who">Odgovor nastavnika</p>
           <p>{m.teacher_answer}</p>
         </div>
+      )}
+      {!m.forwarded && m.feedback === -1 && !m.teacher_answer && (
+        <p className="small muted">Hvala. Pitanje i odgovor poslani su nastavniku da ih pogleda.</p>
       )}
       {m.forwarded && !m.teacher_answer && (
         <p className="small muted">Nastavnik još nije odgovorio.</p>

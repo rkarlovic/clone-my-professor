@@ -15,16 +15,19 @@ import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from functools import lru_cache
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from core import tracing
 from core.db import app_engine, kb_scope
 from core.models import Chunk, ForwardReason, KbVersion, KnowledgeBase
 from llm.client import complete, trace_metadata
 from llm.config import get_model_config
 from llm.prompts import DONT_KNOW, prompt, prompt_version
+from llm.recording import recording
 from retrieval.search import Hit, search
 
 # What the student sees when the clone does not answer. Gender-neutral on purpose.
@@ -125,6 +128,35 @@ class Answer:
 
 
 def answer_question(
+    kb_version_id: uuid.UUID, question: str, *, source: str = "chat", **kw
+) -> Answer:
+    """Answer one question (see `_answer_question`) and trace it with every model call it made
+    (core/tracing.py; only when Langfuse is configured). `source` tags the trace: chat |
+    persona_preview | persona_check | eval | cli."""
+    started = datetime.now(UTC)
+    with recording() as calls:
+        result = _answer_question(kb_version_id, question, **kw)
+    meta = result.trace | {
+        "forwarded": result.forwarded.value if result.forwarded else None,
+        "scope": result.scope,
+        "check": result.check or None,
+        "cited": [s.citation for s in result.cited] or None,
+        "seconds": result.seconds,
+    }
+    tracing.send(
+        "answer",
+        started,
+        datetime.now(UTC),
+        input=question,
+        output=result.text,
+        metadata=meta,
+        tags=[source] + (["forwarded"] if result.forwarded else []),
+        calls=calls,
+    )
+    return result
+
+
+def _answer_question(
     kb_version_id: uuid.UUID,
     question: str,
     *,

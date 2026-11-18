@@ -9,13 +9,15 @@ export type Route =
   | { page: "course"; kbId: string }
   | { page: "chat"; kbId: string }
   | { page: "lti"; query: URLSearchParams }
-  | { page: "admin" };
+  | { page: "admin" }
+  | { page: "invite"; code: string };
 
 export function parseRoute(hash: string): Route {
   const [path, query = ""] = hash.replace(/^#\/?/, "").split("?", 2);
   const parts = path.split("/").filter(Boolean);
   if (parts[0] === "lti") return { page: "lti", query: new URLSearchParams(query) };
   if (parts[0] === "admin") return { page: "admin" };
+  if (parts[0] === "invite" && parts[1]) return { page: "invite", code: parts[1] };
   if (parts[0] === "teacher" && parts[1]) return { page: "course", kbId: parts[1] };
   if (parts[0] === "teacher") return { page: "teacher" };
   if (parts[0] === "chat" && parts[1]) return { page: "chat", kbId: parts[1] };
@@ -27,6 +29,7 @@ export const href = {
   teacher: "#/teacher",
   course: (kbId: string) => `#/teacher/${kbId}`,
   chat: (kbId: string) => `#/chat/${kbId}`,
+  invite: (code: string) => `#/invite/${code}`,
 };
 
 export function useRoute(): Route {

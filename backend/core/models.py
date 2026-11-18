@@ -54,6 +54,7 @@ class ForwardReason(enum.StrEnum):
     low_score = "low_score"  # nothing retrieved above the score floor
     no_source = "no_source"  # the model found no answer in the sources, or cited none
     failed_check = "failed_check"  # the `check` role found the answer off-target or contradictory
+    flagged = "flagged"  # answered, but the student marked the answer not helpful (👎)
 
 
 class TeacherQuestionStatus(enum.StrEnum):
@@ -160,6 +161,7 @@ class TeacherQuestion(Base):
         default=TeacherQuestionStatus.open,
     )
     answer: Mapped[str | None] = mapped_column(Text)
+    ai_answer: Mapped[str | None] = mapped_column(Text)  # what the assistant said (flagged only)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     answered_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id"))
@@ -177,6 +179,8 @@ class ChatMessage(Base):
     student_ref: Mapped[str] = mapped_column(String(200))  # opaque id, never a name
     question: Mapped[str] = mapped_column(Text)
     answer: Mapped[str] = mapped_column(Text)  # what the student saw
+    # a follow-up rewritten to stand on its own (what was answered); None: used as asked
+    standalone: Mapped[str | None] = mapped_column(Text)
     forwarded: Mapped[ForwardReason | None] = mapped_column(
         Enum(ForwardReason, name="forward_reason")
     )
@@ -240,6 +244,10 @@ class LtiPlatform(Base):
     # Web Services (material sync): the base URL and the NAME of the env var with the token
     ws_base_url: Mapped[str | None] = mapped_column(String(500))
     ws_token_env: Mapped[str | None] = mapped_column(String(100))
+    kind: Mapped[str] = mapped_column(String(20), default="moodle")  # moodle | teams | classroom
+    # non-secret sync settings (Teams: tenant_id, client_id; Classroom: subject = the Workspace
+    # user the service account acts as); secrets only in the env var named by ws_token_env
+    sync_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -252,6 +260,36 @@ class LtiLoginState(Base):
     platform_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lti_platform.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SsoLoginState(Base):
+    """One teacher sign-in round trip with Microsoft/Google (state, nonce, PKCE verifier)."""
+
+    __tablename__ = "sso_login_state"
+    state: Mapped[str] = mapped_column(String(100), primary_key=True)
+    nonce: Mapped[str] = mapped_column(String(100))
+    code_verifier: Mapped[str] = mapped_column(String(100))
+    provider: Mapped[str] = mapped_column(String(20))
+    next_page: Mapped[str] = mapped_column(String(100), default="teacher")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CourseInvite(Base):
+    """A single-use link that adds a signed-in teacher to a course (no LMS needed). Only the
+    code's sha256 is stored, so a database reader cannot use an open invite."""
+
+    __tablename__ = "course_invite"
+    id: Mapped[uuid.UUID] = _pk()
+    kb_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_base.id", ondelete="CASCADE"))
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("teacher.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    used_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("teacher.id", ondelete="SET NULL"))
 
 
 class PlatformContextMap(Base):
@@ -270,6 +308,8 @@ class PlatformContextMap(Base):
     last_sync_report: Mapped[dict | None] = mapped_column(JSONB)
     # LMS sections whose new files are published without review; empty = always ask
     auto_add_sections: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    # the course id for material sync if not the LTI context id (Teams group, Classroom course)
+    sync_course_id: Mapped[str | None] = mapped_column(String(300))
 
 
 class LmsFile(Base):
