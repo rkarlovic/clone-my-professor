@@ -1,12 +1,15 @@
-# CMP model configuration for a GPU server: chat roles on vLLM, embeddings and the vision role on
-# Ollama, the reranker on Infinity (CLAUDE.md "Model layer"). Selected with
-# CMP_MODELS_CONFIG=/config/models.vllm.yaml (the setup scripts do it when they find an NVIDIA
-# GPU). The answer model is NOT final: Qwen 3.5 vs Mistral Small 4 vs Gemma 4 is decided on the
-# golden sets with this setup (CLAUDE.md "Open questions"); changing it = edit `serve_model` and
-# the roles below, bump `version`, re-run the sets.
-
-version: "vllm-2026-11-18.1"
-serve_model: Qwen/Qwen3.5-9B  # what the vllm container serves (bf16 needs ~20 GB of GPU memory)
+# CMP model configuration for a GPU with 24 GB or more: Qwen 3.5 9B at full precision
+# (bf16, ~20 GB).
+# Selected by the setup scripts from the GPU's memory (CMP_MODELS_FILE in .env) and passed to
+# api/worker as CMP_MODELS_CONFIG (infra/docker-compose.gpu.yml). Chat roles on vLLM, embeddings
+# and the vision role on Ollama, the reranker on Infinity (CLAUDE.md "Model layer"). The answer
+# model is NOT final: it is chosen on the golden sets (docs/GPU-SETUP.md). Changing it = edit
+# `serve_model`, every `hosted_vllm/...` line to the same name, bump `version`, rerun the setup.
+version: "vllm-2026-11-19.1"
+serve_model: Qwen/Qwen3.5-9B
+# how the vllm container starts this model (read by the setup scripts into VLLM_ARGS):
+# text only (the vision role runs on Ollama), the share of GPU memory and the longest prompt
+serve_args: "--language-model-only --max-model-len 16384 --gpu-memory-utilization 0.85"
 
 roles:
   answer:
@@ -15,8 +18,7 @@ roles:
     api_base: os.environ/VLLM_API_BASE
     params:
       temperature: 0.2
-      # Same as the dev profile until the golden sets are re-run with thinking on (vLLM).
-      reasoning_effort: none
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
 
   fast:
     kind: chat
@@ -24,7 +26,7 @@ roles:
     api_base: os.environ/VLLM_API_BASE
     params:
       temperature: 0.0
-      reasoning_effort: none
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
 
   check:
     kind: chat
@@ -32,7 +34,7 @@ roles:
     api_base: os.environ/VLLM_API_BASE
     params:
       temperature: 0.0
-      reasoning_effort: none
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
 
   context:
     kind: chat
@@ -40,14 +42,7 @@ roles:
     api_base: os.environ/VLLM_API_BASE
     params:
       temperature: 0.0
-      reasoning_effort: none
-
-  vision:
-    kind: chat
-    model: ollama_chat/qwen3-vl:8b
-    api_base: os.environ/OLLAMA_API_BASE
-    params:
-      temperature: 0.0
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
 
   judge:
     kind: chat
@@ -55,7 +50,14 @@ roles:
     api_base: os.environ/VLLM_API_BASE
     params:
       temperature: 0.0
-      reasoning_effort: none
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  vision:
+    kind: chat
+    model: ollama_chat/qwen3-vl:8b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
 
   embedding:
     kind: embedding

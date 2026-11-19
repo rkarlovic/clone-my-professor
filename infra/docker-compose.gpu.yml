@@ -1,14 +1,21 @@
-# Added by the setup scripts when an NVIDIA GPU is present (needs the NVIDIA Container Toolkit):
-# vLLM serves the chat roles (config/models.vllm.yaml), Ollama keeps embeddings and uses the GPU.
+# Added by the setup scripts when an NVIDIA GPU is present (needs the NVIDIA Container Toolkit on
+# Linux; on Windows the NVIDIA driver and Docker Desktop's WSL 2 engine): vLLM serves the chat
+# roles. The scripts pick the models file by the card's memory (CMP_MODELS_FILE in .env:
+# models.vllm.yaml for 24 GB+, models.vllm-16gb.yaml, models.vllm-8gb.yaml) and copy its
+# `serve_model` / `serve_args` into VLLM_MODEL / VLLM_ARGS. Ollama (embeddings) stays on the CPU
+# unless infra/docker-compose.gpu-ollama.yml is added too (the scripts do that for 24 GB+).
 #
 #   docker compose -f infra/docker-compose.yml -f infra/docker-compose.gpu.yml --env-file .env up -d
 
 services:
   vllm:
     image: vllm/vllm-openai:v0.32.0
-    # VLLM_MODEL is set by the setup scripts from `serve_model` in config/models.vllm.yaml
-    command: ["--model", "${VLLM_MODEL:?run the setup script}", "--max-model-len", "16384", "--gpu-memory-utilization", "0.85"]
+    # the image's entrypoint is `vllm serve`; VLLM_ARGS holds several flags, so a shell splits them
+    entrypoint: ["/bin/sh", "-c"]
+    command: ['exec vllm serve "$$VLLM_MODEL" $$VLLM_ARGS']
     environment:
+      VLLM_MODEL: ${VLLM_MODEL:?run the setup script}
+      VLLM_ARGS: ${VLLM_ARGS:---language-model-only --max-model-len 16384 --gpu-memory-utilization 0.85}
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - cmp_hf:/root/.cache/huggingface  # weights: downloaded once, kept in the volume
@@ -24,22 +31,17 @@ services:
       test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
       interval: 15s
       timeout: 5s
-      retries: 60
+      retries: 120  # the first start downloads the weights
     restart: unless-stopped
-
-  ollama:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
 
   api:
     environment:
-      CMP_MODELS_CONFIG: /config/models.vllm.yaml
+      CMP_MODELS_CONFIG: /config/${CMP_MODELS_FILE:-models.vllm.yaml}
 
   worker:
     environment:
-      CMP_MODELS_CONFIG: /config/models.vllm.yaml
+      CMP_MODELS_CONFIG: /config/${CMP_MODELS_FILE:-models.vllm.yaml}
+
+  benchmark:
+    environment:
+      CMP_MODELS_CONFIG: /config/${CMP_MODELS_FILE:-models.vllm.yaml}

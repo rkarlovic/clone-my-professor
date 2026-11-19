@@ -79,8 +79,15 @@ if (-not (Test-Path (Join-Path $Root "infra\docker-compose.yml"))) {
 Set-Location $Root
 
 # --- 3. Docker running? -----------------------------------------------------------------------
-docker info *> $null
-if ($LASTEXITCODE -ne 0) {
+# Runs a native program, ignoring its stderr (Windows PowerShell 5.1 turns that into an error
+# under "Stop"); returns its output as text.
+function Quiet {
+    $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try { $exe, $rest = $args; (& $exe @rest 2>$null | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $old }
+}
+function Start-Docker {
+    docker info *> $null
+    if ($LASTEXITCODE -eq 0) { return }
     $desktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
     if (Test-Path $desktop) {
         Say "Starting Docker Desktop..."
@@ -94,12 +101,62 @@ if ($LASTEXITCODE -ne 0) {
     docker info *> $null
     if ($LASTEXITCODE -ne 0) { Fail "Docker is not running. Start Docker Desktop and run this script again." }
 }
+Start-Docker
+
+# --- 3b. the graphics card: which models file fits its memory ----------------------------------
+# 24 GB+: Qwen 3.5 9B (full precision), Ollama on the GPU too; 14-23 GB: the 9B with 4-bit weights;
+# 7-13 GB: the 4B with 4-bit weights, embeddings on the CPU; smaller or none: everything on the CPU.
+$gpu = $false; $gpuOllama = $false; $vramMb = 0; $modelsFile = "models.yaml"
+if (Has "nvidia-smi") {
+    $q = Quiet nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits
+    if ($LASTEXITCODE -eq 0 -and $q -match "^\s*(\d+)") { $vramMb = [int]$Matches[1] }
+}
+if ($vramMb -ge 22000) { $gpu = $true; $gpuOllama = $true; $modelsFile = "models.vllm.yaml" }
+elseif ($vramMb -ge 14000) { $gpu = $true; $modelsFile = "models.vllm-16gb.yaml" }
+elseif ($vramMb -ge 7000) { $gpu = $true; $modelsFile = "models.vllm-8gb.yaml" }
+elseif ($vramMb -gt 0) { Warn "The NVIDIA card has only $vramMb MB of memory, too little for vLLM: the models run on the CPU." }
+if ($gpu) { Say ("NVIDIA GPU with {0:N1} GB of memory: config\$modelsFile" -f ($vramMb / 1024)) }
+
+# Docker Desktop gets half of the PC's memory by default; vLLM, the document reader and the
+# database need about 11 GB together. The limit lives in .wslconfig in the Windows user folder.
+if ($gpu) {
+    $dockerGb = [math]::Round([double](Quiet docker info --format "{{.MemTotal}}") / 1GB, 1)
+    $hostGb = [math]::Round([double](Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB)
+    $wantGb = [math]::Min(12, $hostGb - 4)
+    $wslConfig = Join-Path $env:USERPROFILE ".wslconfig"
+    if ($dockerGb -lt 11 -and $wantGb -gt $dockerGb) {
+        Warn "Docker may use only $dockerGb GB of this PC's $hostGb GB; with the GPU models it needs about 11 GB."
+        Write-Host "    That limit is set in the file $wslConfig"
+        if (Test-Path $wslConfig) {
+            Write-Host "    The file exists: open it in Notepad, put these two lines in it (or change the memory line):"
+            Write-Host "        [wsl2]"
+            Write-Host "        memory=${wantGb}GB"
+            Write-Host "    save it, then run:  wsl --shutdown   and this script again."
+        } else {
+            $answer = "n"
+            try { $answer = Read-Host "    Create it with memory=${wantGb}GB and restart Docker now? [Y/n]" } catch { }
+            if ($answer -notmatch "^[nN]") {
+                [IO.File]::WriteAllText($wslConfig, "[wsl2]`r`nmemory=${wantGb}GB`r`n", (New-Object System.Text.UTF8Encoding $false))
+                Say "Wrote $wslConfig; restarting Docker..."
+                Get-Process "Docker Desktop" -ErrorAction SilentlyContinue | Stop-Process -Force
+                $null = Quiet wsl --shutdown
+                Start-Sleep -Seconds 5
+                Start-Docker
+                $dockerGb = [math]::Round([double](Quiet docker info --format "{{.MemTotal}}") / 1GB, 1)
+                Say "Docker may now use $dockerGb GB."
+            } else {
+                Write-Host "    Without it vLLM may stop for lack of memory. To do it later, create that file with:"
+                Write-Host "        [wsl2]"
+                Write-Host "        memory=${wantGb}GB"
+            }
+        }
+    }
+}
 
 # --- compose command ----------------------------------------------------------------------------
-$gpu = $false
-if (Has "nvidia-smi") { nvidia-smi *> $null; $gpu = ($LASTEXITCODE -eq 0) }
 $Compose = @("compose", "-f", "infra/docker-compose.yml")
 if ($gpu) { $Compose += @("-f", "infra/docker-compose.gpu.yml") }
+if ($gpuOllama) { $Compose += @("-f", "infra/docker-compose.gpu-ollama.yml") }
 $Compose += @("--env-file", ".env")
 $tracing = $WithTracing -or ((Test-Path ".env") -and (Select-String -Path ".env" -Pattern "^LANGFUSE_SALT=" -Quiet))
 if ($tracing) { $Compose = $Compose[0..2] + @("-f", "infra/docker-compose.langfuse.yml") + $Compose[3..($Compose.Length - 1)] }
@@ -175,13 +232,18 @@ if ($tracing) {
     }
     foreach ($k in $want.Keys) { if (-not (Get-EnvValue $k)) { Set-EnvValue $k $want[$k] } }
 }
+# The models file for this computer (3b) and, with a GPU, how vLLM starts its model.
+Set-EnvValue "CMP_MODELS_FILE" $modelsFile
 if ($gpu) {
-    $serve = (Select-String -Path "config\models.vllm.yaml" -Pattern '^serve_model:\s*(\S+)').Matches[0].Groups[1].Value
+    $cfgPath = Join-Path $Root "config\$modelsFile"
+    $serve = (Select-String -Path $cfgPath -Pattern '^serve_model:\s*(\S+)').Matches[0].Groups[1].Value
+    $serveArgs = (Select-String -Path $cfgPath -Pattern '^serve_args:\s*"([^"]*)"').Matches[0].Groups[1].Value
     Set-EnvValue "VLLM_MODEL" $serve
+    Set-EnvValue "VLLM_ARGS" $serveArgs
 }
 
 # --- 5. build and start --------------------------------------------------------------------------
-Say ("Building and starting CMP" + $(if ($gpu) { " (NVIDIA GPU found: vLLM included)" } else { " (no NVIDIA GPU: models run on the CPU)" }) + "...")
+Say ("Building and starting CMP" + $(if ($gpu) { " (vLLM serves $(Get-EnvValue "VLLM_MODEL"); the first start downloads it)" } else { " (no NVIDIA GPU: models run on the CPU)" }) + "...")
 Dc up -d --build
 
 # --- 6. models -----------------------------------------------------------------------------------

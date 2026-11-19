@@ -273,6 +273,11 @@ fixed, a 144-second answer now arrives in full.
   the whole benchmark in one command (`.\setup.ps1 -Benchmark`): it loads the courses, runs
   every question set and writes one summary table per model. Tried here on the smaller course:
   same search numbers as before, answers working.
+- **Any NVIDIA card size (2026-11-19):** the setup now reads how much memory the graphics card
+  has and picks a model that fits: the full Qwen 3.5 9B on 24 GB or more, a compressed 9B on
+  16 GB, a compressed 4B on 8 GB (such as the RTX A1000 test PC). vLLM downloads it by itself.
+  On Windows it also checks Docker's share of the PC's memory and offers to raise it. Not yet
+  tried on a real GPU.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
@@ -485,9 +490,11 @@ Switching a model means editing that file and re-running the golden set — no c
 The dev chat models are placeholders that fit an 11 GB GPU. The real choice for `answer` is made on
 golden-set results from the vLLM setup used in the pilot, never on Ollama's quantized models.
 
-Two model files: `config/models.yaml` (no GPU: everything through Ollama) and
-`config/models.vllm.yaml` (with an NVIDIA GPU: the chat roles through vLLM, which serves the one
-model named by `serve_model`). The setup scripts pick the file and download what it names.
+Model files: `config/models.yaml` (no GPU: everything through Ollama) and, with an NVIDIA GPU,
+one per card size: `config/models.vllm.yaml` (24 GB+), `models.vllm-16gb.yaml`,
+`models.vllm-8gb.yaml` (the chat roles through vLLM, which serves the one model named by
+`serve_model`, started with `serve_args`). The setup scripts pick the file from the card's memory
+and download what it names (see [docs/GPU-SETUP.md](docs/GPU-SETUP.md)).
 
 To try another model (e.g. a Mistral): change the `model:` lines (Ollama names such as
 `ollama_chat/mistral-small3.2:24b`, or `serve_model` + `hosted_vllm/<Hugging Face id>` for vLLM)

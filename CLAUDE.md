@@ -1391,6 +1391,32 @@ Teams and Classroom (2026-11-18).**
 - **`docs/GPU-SETUP.md`**: step by step for the GPU PC without help: what to copy from the old
   computer (course folders, parse cache, `eval/sets/local/`; not in git), which model fits the
   card's memory, setup with the smoke test, the benchmark and comparing models, troubleshooting.
+- **Models file by GPU memory (2026-11-19)**, for a test PC with an 8 GB RTX A1000 (16 GB RAM):
+  - Three vLLM files: `models.vllm.yaml` (24 GB+: Qwen 3.5 9B bf16, as before),
+    `models.vllm-16gb.yaml` (14–23 GB: `RedHatAI/Qwen3.5-9B-quantized.w4a16`, 11.4 GB of weights
+    with the vision part) and `models.vllm-8gb.yaml` (7–13 GB: `RedHatAI/Qwen3.5-4B-quantized.w4a16`,
+    5.5 GB). Red Hat's builds (Apache 2.0) were chosen over community AWQ uploads; Qwen publishes
+    no 4-bit 9B/4B. The 4-bit 9B does not fit 8 GB (embeddings and linear-attention layers stay
+    unquantized).
+  - New `serve_args` field in the models file (`llm/config.py`): vLLM's start flags,
+    `--language-model-only` (skips the vision encoder; the `vision` role is on Ollama), the memory
+    share and `--max-model-len` (8 GB file: 0.80 and 8192, room for a monitor on the card; a
+    question with five slides is ~2–4k tokens). `infra/docker-compose.gpu.yml` starts
+    `vllm serve "$VLLM_MODEL" $VLLM_ARGS` through `/bin/sh -c` (the image's entrypoint is
+    `vllm serve`; argument splitting checked with a stand-in container) and passes
+    `CMP_MODELS_FILE` to api, worker and benchmark (the benchmark used the CPU file on a GPU
+    before). Ollama on the GPU moved to `infra/docker-compose.gpu-ollama.yml`, added only for
+    24 GB+, so on a small card vLLM has it alone.
+  - The setup scripts read `nvidia-smi --query-gpu=memory.total`, pick the file, write
+    `CMP_MODELS_FILE`, `VLLM_MODEL`, `VLLM_ARGS` to `.env` on every run (a card under 7 GB = the
+    CPU path). `setup.ps1` also checks Docker's memory: under 11 GB with a GPU it names
+    `%USERPROFILE%\.wslconfig`, offers to create it (`memory=` min(12, RAM − 4) GB), stops Docker
+    Desktop, runs `wsl --shutdown` and starts Docker again; an existing file gets instructions.
+    Tested with a fake `nvidia-smi` (4/8/16/24 GB, both scripts) and a temporary user folder
+    (no answer / yes / file exists; Docker restart stubbed); the CPU install still runs.
+  - Checked in vLLM 0.32's source: `--language-model-only` exists, and `reasoning_effort: none`
+    is accepted and turned into the chat template's `enable_thinking=False`, so the vLLM files
+    keep it. **Not run on a real GPU yet.**
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
@@ -1548,7 +1574,8 @@ uv run python -m scripts.smoketest                     # 10 questions on CMP's o
 #   --ids s01,s08, --keep (leave the course), --build (rebuild smoke/osnove_pcelarstva.pptx)
 .\setup.ps1 -Check                                     # installation: the same in the api container
 .\setup.ps1 -Benchmark [-BenchmarkArgs "--retrieval-only"]   # internal benchmark (docs/GPU-SETUP.md)
-#   = docker compose -f infra/docker-compose.yml --env-file .env run --rm benchmark #       python -m scripts.benchmark [--subjects A] [--sets teacher] [--limit N] [--no-judge]
+#   = docker compose -f infra/docker-compose.yml --env-file .env run --rm benchmark \
+#       python -m scripts.benchmark [--subjects A] [--sets teacher] [--limit N] [--no-judge]
 ```
 
 Database roles: migrations connect as the owner (`DATABASE_OWNER_URL`); everything else connects

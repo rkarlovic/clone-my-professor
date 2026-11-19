@@ -1,0 +1,75 @@
+# CMP model configuration for a GPU with 7-13 GB (e.g. an 8 GB RTX A1000): Qwen 3.5 4B with
+# 4-bit weights (Red Hat's w4a16 build for vLLM, Apache 2.0; ~5.5 GB with the vision part, less
+# text-only). 0.80 of the memory, so a monitor on the same card still has room; prompts up to
+# 8,192 tokens (a question with five slides needs ~2,000-4,000). Not yet tried on such a card.
+# Selected by the setup scripts from the GPU's memory (CMP_MODELS_FILE in .env) and passed to
+# api/worker as CMP_MODELS_CONFIG (infra/docker-compose.gpu.yml). Chat roles on vLLM, embeddings
+# and the vision role on Ollama, the reranker on Infinity (CLAUDE.md "Model layer"). The answer
+# model is NOT final: it is chosen on the golden sets (docs/GPU-SETUP.md). Changing it = edit
+# `serve_model`, every `hosted_vllm/...` line to the same name, bump `version`, rerun the setup.
+version: "vllm8-2026-11-19.1"
+serve_model: RedHatAI/Qwen3.5-4B-quantized.w4a16
+# how the vllm container starts this model (read by the setup scripts into VLLM_ARGS):
+# text only (the vision role runs on Ollama), the share of GPU memory and the longest prompt
+serve_args: "--language-model-only --max-model-len 8192 --gpu-memory-utilization 0.80"
+
+roles:
+  answer:
+    kind: chat
+    model: hosted_vllm/RedHatAI/Qwen3.5-4B-quantized.w4a16
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.2
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  fast:
+    kind: chat
+    model: hosted_vllm/RedHatAI/Qwen3.5-4B-quantized.w4a16
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  check:
+    kind: chat
+    model: hosted_vllm/RedHatAI/Qwen3.5-4B-quantized.w4a16
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  context:
+    kind: chat
+    model: hosted_vllm/RedHatAI/Qwen3.5-4B-quantized.w4a16
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  judge:
+    kind: chat
+    model: hosted_vllm/RedHatAI/Qwen3.5-4B-quantized.w4a16
+    api_base: os.environ/VLLM_API_BASE
+    params:
+      temperature: 0.0
+      reasoning_effort: none  # vLLM turns this into the chat template's thinking switch
+
+  vision:
+    kind: chat
+    model: ollama_chat/qwen3-vl:8b
+    api_base: os.environ/OLLAMA_API_BASE
+    params:
+      temperature: 0.0
+
+  embedding:
+    kind: embedding
+    model: ollama/bge-m3:567m
+    api_base: os.environ/OLLAMA_API_BASE
+    dimensions: 1024
+    min_score: 0.40
+    tokenizer: BAAI/bge-m3
+
+  reranker:
+    kind: rerank
+    model: infinity/BAAI/bge-reranker-v2-m3
+    api_base: os.environ/INFINITY_API_BASE

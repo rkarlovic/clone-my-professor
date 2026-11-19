@@ -1,0 +1,13 @@
+# Ollama (embeddings, the vision role) on the GPU too. Only for cards with room next to vLLM
+# (the setup scripts add this file for 24 GB+): on a smaller card both would compete for its
+# memory and vLLM would not start. Embeddings are fast enough on the CPU.
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

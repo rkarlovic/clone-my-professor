@@ -93,10 +93,23 @@ if ! docker info >/dev/null 2>&1; then
   docker info >/dev/null 2>&1 || fail "Docker is not running (on Linux: sudo systemctl start docker; you may need to log in again after being added to the docker group)"
 fi
 
-GPU=0
-if has nvidia-smi && nvidia-smi >/dev/null 2>&1; then GPU=1; fi
+# The graphics card: which models file fits its memory. 24 GB+: Qwen 3.5 9B (full precision),
+# Ollama on the GPU too; 14-23 GB: the 9B with 4-bit weights; 7-13 GB: the 4B with 4-bit weights,
+# embeddings on the CPU; smaller or none: everything on the CPU.
+GPU=0 GPU_OLLAMA=0 VRAM_MB=0 MODELS_FILE=models.yaml
+if has nvidia-smi; then
+  VRAM_MB="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc '0-9')"
+  VRAM_MB="${VRAM_MB:-0}"
+fi
+if [ "$VRAM_MB" -ge 22000 ]; then GPU=1 GPU_OLLAMA=1 MODELS_FILE=models.vllm.yaml
+elif [ "$VRAM_MB" -ge 14000 ]; then GPU=1 MODELS_FILE=models.vllm-16gb.yaml
+elif [ "$VRAM_MB" -ge 7000 ]; then GPU=1 MODELS_FILE=models.vllm-8gb.yaml
+elif [ "$VRAM_MB" -gt 0 ]; then warn "The NVIDIA card has only $VRAM_MB MB of memory, too little for vLLM: the models run on the CPU."
+fi
+[ "$GPU" = 1 ] && say "NVIDIA GPU with $(( (VRAM_MB + 512) / 1024 )) GB of memory: config/$MODELS_FILE"
 COMPOSE=(docker compose -f infra/docker-compose.yml)
 [ "$GPU" = 1 ] && COMPOSE+=(-f infra/docker-compose.gpu.yml)
+[ "$GPU_OLLAMA" = 1 ] && COMPOSE+=(-f infra/docker-compose.gpu-ollama.yml)
 TRACING=$WITH_TRACING
 [ -f .env ] && grep -q "^LANGFUSE_SALT=" .env && TRACING=1  # chosen before: stays on
 [ "$TRACING" = 1 ] && COMPOSE+=(-f infra/docker-compose.langfuse.yml)
@@ -151,12 +164,15 @@ if [ "$TRACING" = 1 ]; then
     [ -n "$(get_env "${kv%%=*}")" ] || set_env "${kv%%=*}" "${kv#*=}"
   done
 fi
+# The models file for this computer and, with a GPU, how vLLM starts its model.
+set_env CMP_MODELS_FILE "$MODELS_FILE"
 if [ "$GPU" = 1 ]; then
-  set_env VLLM_MODEL "$(sed -n 's/^serve_model:[[:space:]]*\([^[:space:]]*\).*/\1/p' config/models.vllm.yaml)"
+  set_env VLLM_MODEL "$(sed -n 's/^serve_model:[[:space:]]*\([^[:space:]]*\).*/\1/p' "config/$MODELS_FILE")"
+  set_env VLLM_ARGS "$(sed -n 's/^serve_args:[[:space:]]*"\([^"]*\)".*/\1/p' "config/$MODELS_FILE")"
 fi
 
 # --- 5. build and start --------------------------------------------------------------------------
-if [ "$GPU" = 1 ]; then say "Building and starting CMP (NVIDIA GPU found: vLLM included)..."
+if [ "$GPU" = 1 ]; then say "Building and starting CMP (vLLM serves $(get_env VLLM_MODEL); the first start downloads it)..."
 else say "Building and starting CMP (no NVIDIA GPU: models run on the CPU)..."; fi
 "${COMPOSE[@]}" up -d --build
 
