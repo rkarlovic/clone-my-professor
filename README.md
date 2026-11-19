@@ -250,13 +250,15 @@ fixed, a 144-second answer now arrives in full.
 - The chat now understands short follow-ups such as "a tko je provodi?" by turning them into
   a full question first. Each student can ask up to 30 questions an hour per course, one at a
   time.
-- Microsoft Teams and Google Classroom can open CMP the same way Moodle does (LTI). CMP can
-  also fetch their course files (Teams' files, Classroom's published materials; Google Docs
-  and Slides are converted). This was tested against simulated services only; it needs a
-  real school account to try.
+- CMP can fetch course files from Microsoft Teams and Google Classroom (Teams' files,
+  Classroom's published materials; Google Docs and Slides are converted). This was tested
+  against simulated services only; it needs a real school account to try. (Correction,
+  2026-11-19: this was first written as "they open CMP the same way Moodle does (LTI)". They
+  don't: neither Teams nor Classroom can open outside tools that way. Teams uses the tab app
+  below; how Classroom students get in is still open.)
 
 **Teams without LTI, a smoke test, model downloads (2026-11-18).**
-- Schools whose Teams can't use LTI can add CMP as a **Teams tab**. Teams signs the user in;
+- Schools add CMP to Teams as a **Teams tab** (the only way in from Teams). Teams signs the user in;
   CMP asks Microsoft which team members are owners (treated as teachers) and which are
   members (students). From there it works as in Moodle: a teacher links the team to a course
   once, and members get its chat. A script builds the app package the school uploads to
@@ -318,7 +320,7 @@ The full rule set lives in [CLAUDE.md](CLAUDE.md); the short version:
 | Answers | Scope check (`fast`; admin questions forwarded at once, also by a keyword net), answer with numbered citations (`answer`), citation and prose-refusal checks, a live answer check (`check`) that stops contradictions and mostly-refusal answers; everything stopped goes to the teacher queue with a reason |
 | Evaluation | Golden question set per subject; recall@k and MRR split by easy/hard, plus top scores for questions the clone should decline; answer evaluation (answered, cites the expected slide, forwarded, optional judge) |
 | Sign-in and teams | Teachers: Microsoft/Google (institution accounts only) or LTI; course invites, owners, removing teachers; students only through their learning platform |
-| Teams and Classroom (step 5) | Launch via LTI 1.3, or (Teams without LTI) a Teams tab app with Teams sign-in; material sync through Microsoft Graph (team files) and Classroom + Drive (published materials, Docs/Slides exported) |
+| Teams and Classroom (step 5) | Teams: a Teams tab app with Teams sign-in (Teams cannot launch LTI tools); Classroom: no student entry yet; material sync through Microsoft Graph (team files) and Classroom + Drive (published materials, Docs/Slides exported) |
 | Tracing | One Langfuse trace per answer with every model call (OpenTelemetry), self-hosted next to CMP; optional |
 | Collected questions | 👎 answers go to the teacher; queue answers with a source become the course's own test questions, checked after each upload and exportable for the evaluators |
 | Chat | Short follow-ups rewritten to stand on their own; 30 questions per hour per student and course, one at a time |

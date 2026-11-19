@@ -8,7 +8,8 @@ r"""Register an LMS (LTI 1.3 platform) with CMP, or list the registered ones.
         --issuer http://127.0.0.1:8080 --client-id <from the LMS> \
         --auth-url http://127.0.0.1:8080/mod/lti/auth.php \
         --jwks-url http://127.0.0.1:8080/mod/lti/certs.php [--deployment-id 1]
-    # Teams / Google Classroom (launch by LTI 1.3 as above; material sync through their APIs):
+    # Teams / Google Classroom: material sync through their APIs (neither launches LTI tools;
+    # Teams opens CMP through the tab app, see scripts.teams_app):
     uv run python -m scripts.lti_platform sync --issuer <issuer> --kind teams \
         --tenant-id <Entra tenant id> --client-id <app id> --secret-env CMP_TEAMS_SECRET
     uv run python -m scripts.lti_platform sync --issuer <issuer> --kind classroom \

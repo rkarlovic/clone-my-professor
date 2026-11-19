@@ -167,7 +167,16 @@ get_roster(course) [optional] · send_result(...) [optional, later]
 ```
 - **Moodle/Merlin:** LTI 1.3 for launch/roster/grades; **Moodle Web Services** (`core_course_get_contents` + token file download) for materials. Change detection = **polling job** (every 15–30 min, full comparison by modified time/hash). A future webhook plugin only triggers the same "check course" job. Merlin access requires SRCE approval.
 - **Teams:** Teams app + Microsoft Graph; **delta queries** on the team's SharePoint library; Graph notifications only as a trigger (subscriptions expire). Entra ID admin consent, read-only.
+  **Launch = the Teams tab app with Teams SSO, never LTI**: Teams is not an LTI platform
+  (Microsoft's "Teams Assignments LTI" / "Microsoft 365 LTI" is Microsoft's tool *inside*
+  other LMSs, the opposite direction). A dev tenant needs a paid Visual Studio subscription
+  (Microsoft 365 Developer Program sandbox) or the institution's own tenant.
 - **Google Classroom:** Classroom API (materials/coursework) + Drive API (files, `changes` list); export native Docs/Slides to PDF/DOCX/PPTX before Docling. Workspace admin consent, read-only scopes.
+  **Classroom is not an LTI platform either** (Google's LTI tools go the other way, Google
+  content inside an LMS). Its own way to embed a tool is **Classroom add-ons**, a separate
+  framework (not LTI) that only schools on Education Plus or the Teaching and Learning
+  Upgrade can use. Fundamentals (free) has only the API. Developers get a free test domain.
+  How Classroom students reach CMP is open (see "Open questions").
 - **Direct upload** in CMP's own web app (SSO via Microsoft/Google) works for every institution and is built first.
 - Detected changes → draft version → teacher notification → approval → atomic activation. Per-course rule: "always ask me" (default) or "auto-add from selected sections".
 
@@ -186,8 +195,10 @@ _Update this section when a build step's state changes._
 **Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
 **Step 3 (product): started 2026-11-17 with direct upload, see the step 3 block below.**
 **Step 4 (Moodle connector): done except SRCE/Merlin access (needs their approval).**
-**Step 5 (Teams, Google Classroom): material-sync connectors built 2026-11-18 (launch via LTI
-1.3); not yet tried with a real tenant or Workspace. See "Step 4, part 8 + step 5" below.**
+**Step 5 (Teams, Google Classroom): material-sync connectors built 2026-11-18; Teams opens
+CMP through the Teams tab app; Classroom has no student entry yet (neither platform launches
+LTI 1.3 tools, checked 2026-11-19). Not yet tried with a real tenant or Workspace. See
+"Step 4, part 8 + step 5" below.**
 
 Done:
 - Dev stack: Postgres 18 + pgvector 0.8.6, Ollama (optional NVIDIA GPU override), Infinity
@@ -1316,9 +1327,9 @@ Teams and Classroom (2026-11-18).**
   stored exchanges (holds across API instances) → HTTP 429 with the minutes to wait; one
   question at a time per student (per API process).
 - **Teams and Google Classroom connectors** (migration `0021`: `lti_platform.kind`,
-  `sync_config`, `platform_context_map.sync_course_id`). Both launch CMP through **LTI 1.3**
-  like Moodle (Teams Assignments and Classroom support LTI 1.3 tools), so only material sync is
-  new:
+  `sync_config`, `platform_context_map.sync_course_id`). Material sync only. (This was built
+  assuming both launch CMP through LTI 1.3 like Moodle; **that is wrong**, checked 2026-11-19:
+  neither launches LTI tools. Teams uses the tab app (part 2); Classroom has no launch yet.)
   - `connectors/teams`: Microsoft Graph with the app's own identity (client credentials,
     application permission that only reads files: `Files.Read.All` or `Sites.Selected`), delta
     query over the team's SharePoint library (full enumeration each run; the core compares
@@ -1337,7 +1348,7 @@ Teams and Classroom (2026-11-18).**
   `test_connectors`), frontend 22.
 
 **Step 5, part 2: Teams tab app, smoke test, model check (2026-11-18).**
-- **Teams tab app** for schools without LTI in Teams (`core/teams.py`, `app/teams.py`,
+- **Teams tab app**, the only way into CMP from Teams (`core/teams.py`, `app/teams.py`,
   `pages/TeamsPage.tsx`, `scripts.teams_app`). A configurable channel tab whose page is CMP's
   own (`#/teams`; `#/teams/config` only saves the tab). The page loads `@microsoft/teams-js`
   2.58.0 (only there), asks Teams for an SSO token and posts it with the team's group id to
@@ -1589,4 +1600,9 @@ KB content is read/written only inside `core.db.kb_scope(kb_version_id)`.
 - ~~Smoke test~~: decided and built 2026-11-18 (10 questions on our own course, `scripts.smoketest`, `setup -Check`).
 - Whether the pilot institution accepts open models of non-EU origin (Qwen) when self-hosted in the EU.
 - Pilot institution, subject(s) and teacher(s); SRCE contact for Merlin.
+- **How Google Classroom students reach CMP.** No LTI, and teacher SSO is teachers only, so
+  today a Classroom course can sync material but its students cannot get in. Options: Google
+  sign-in for students with a Classroom API roster check (like the Teams tab checks team
+  membership through Graph; works on the free Fundamentals edition), or a Classroom add-on
+  (paid editions only, a separate framework to build). Decide before building.
 - Business model: who pays (institution licence is the working assumption).
