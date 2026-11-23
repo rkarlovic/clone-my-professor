@@ -167,6 +167,7 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.gpu.yml --env
 | symptom | likely cause / fix |
 |---|---|
 | vLLM log: `CUDA out of memory` or "not enough free memory" | something else uses the card (a monitor plugged into it, another program): see step 1; or lower `--gpu-memory-utilization` / `--max-model-len` in `serve_args:` of the chosen models file, then `.\setup.ps1` |
+| vLLM log: `max_num_seqs (…) exceeds available Mamba cache blocks (N)` | too many parallel conversations for the card's memory: lower `--max-num-seqs` in `serve_args:` of the chosen models file below N, then `.\setup.ps1` |
 | vLLM container stops, `docker` reports exit code 137 | Docker ran out of memory: the `.wslconfig` step in step 3 |
 | vLLM log: `401` / `gated repo` | the model needs a Hugging Face account: create a token at huggingface.co, put `HF_TOKEN=…` in `.env`, run `.\setup.ps1` |
 | vLLM log: an error about `--language-model-only` | the chosen model has no vision part: remove that flag from `serve_args:` |

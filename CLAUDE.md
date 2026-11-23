@@ -1427,7 +1427,14 @@ Teams and Classroom (2026-11-18).**
     (no answer / yes / file exists; Docker restart stubbed); the CPU install still runs.
   - Checked in vLLM 0.32's source: `--language-model-only` exists, and `reasoning_effort: none`
     is accepted and turned into the chat template's `enable_thinking=False`, so the vLLM files
-    keep it. **Not run on a real GPU yet.**
+    keep it.
+  - **First run on the RTX A1000 (2026-11-23):** card detected after two setup fixes
+    (`nvidia-smi`'s comma option was split by PowerShell; the vLLM wait counted restarts from
+    earlier runs). vLLM loaded the 4-bit 4B in ~20 s (4.41 GiB) and then refused to start:
+    `max_num_seqs (256) exceeds available Mamba cache blocks (82)` (Qwen 3.5's linear-attention
+    layers need one cache block per running sequence). All three vLLM files now add
+    `--max-num-seqs 32`. The setup waits for vLLM (healthy, or a new restart → its last 40 log
+    lines) before the smoke test.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see

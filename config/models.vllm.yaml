@@ -9,7 +9,9 @@ version: "vllm-2026-11-19.1"
 serve_model: Qwen/Qwen3.5-9B
 # how the vllm container starts this model (read by the setup scripts into VLLM_ARGS):
 # text only (the vision role runs on Ollama), the share of GPU memory and the longest prompt
-serve_args: "--language-model-only --max-model-len 16384 --gpu-memory-utilization 0.85"
+# and at most 32 conversations at once: Qwen 3.5 keeps a small cache per conversation and vLLM
+# refuses to start if its default of 256 does not fit (an 8 GB card has room for 82)
+serve_args: "--language-model-only --max-model-len 16384 --gpu-memory-utilization 0.85 --max-num-seqs 32"
 
 roles:
   answer:
