@@ -11,6 +11,11 @@ import litellm
 from llm.config import ModelConfig, Role, get_model_config
 from llm.recording import record, usage_of
 
+# LiteLLM prints a "Provider List" banner whenever an internal model-name lookup fails (e.g. the
+# name Ollama reports back, without our provider prefix) and then carries on; real errors still
+# raise and are logged by the callers.
+litellm.suppress_debug_info = True
+
 
 def _cfg(config: ModelConfig | None) -> ModelConfig:
     return config or get_model_config()
