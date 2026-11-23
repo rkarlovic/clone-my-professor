@@ -182,6 +182,34 @@ else say "Building and starting CMP (no NVIDIA GPU: models run on the CPU)..."; 
 say "Checking the AI models (missing ones are downloaded once; can take a while)..."
 "${COMPOSE[@]}" exec -T api python -m scripts.models --pull
 
+# --- 6b. with a GPU: wait until vLLM has loaded its model -------------------------------------------
+# The first start downloads the model (several GB) before vLLM answers; questions sent earlier
+# fail with "connection refused". If vLLM stops or keeps restarting, show why.
+VLLM_READY=1
+if [ "$GPU" = 1 ]; then
+  VLLM_READY=0
+  say "Waiting for vLLM to load $(get_env VLLM_MODEL) (the first start downloads it: 10-30 minutes)..."
+  VLLM_ID="$("${COMPOSE[@]}" ps -q vllm 2>/dev/null | grep -E "^[0-9a-f]{12,}$" | head -1)"
+  STARTED=$(date +%s); LAST_NOTE=$STARTED
+  while [ -n "$VLLM_ID" ] && [ $(( $(date +%s) - STARTED )) -lt 2700 ]; do
+    read -r V_STATUS V_RESTARTS V_HEALTH <<< "$(docker inspect --format '{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$VLLM_ID" 2>/dev/null)"
+    if [ "$V_HEALTH" = healthy ]; then VLLM_READY=1; break; fi
+    case "$V_STATUS" in exited|dead) break ;; esac
+    [ "${V_RESTARTS:-0}" -gt 0 ] && break  # crashed (restarts on its own)
+    if [ $(( $(date +%s) - LAST_NOTE )) -ge 60 ]; then
+      echo "    $(( ($(date +%s) - STARTED) / 60 )) min: $(docker logs --tail 1 "$VLLM_ID" 2>&1 | cut -c1-110)"
+      LAST_NOTE=$(date +%s)
+    fi
+    sleep 10
+  done
+  if [ "$VLLM_READY" = 1 ]; then say "vLLM is ready ($(( ($(date +%s) - STARTED) / 60 )) min)."
+  else
+    warn "vLLM did not start. Its last log lines:"
+    [ -n "$VLLM_ID" ] && docker logs --tail 40 "$VLLM_ID" 2>&1 | sed 's/^/    /'
+    warn "Look for the cause in docs/GPU-SETUP.md, section 'If something goes wrong'; paste these lines when asking for help."
+  fi
+fi
+
 # --- 7. wait until CMP answers --------------------------------------------------------------------
 SITE_NAME="$(get_env CMP_SITE)"
 say "Waiting for $SCHEME://$SITE_NAME ..."
@@ -216,12 +244,14 @@ fi
 
 
 # --- 9. optional: smoke test ------------------------------------------------------------------------
-if [ "$CHECK" = 1 ]; then
+if [ "$CHECK" = 1 ] && [ "$VLLM_READY" = 0 ]; then warn "Smoke test skipped: vLLM is not running (see above)."
+elif [ "$CHECK" = 1 ]; then
   say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
   "${COMPOSE[@]}" exec -T api python -m scripts.smoketest || warn "The smoke test did not pass; see the lines marked FAIL above."
 fi
 # --- 10. optional: the internal benchmark (course folders in data/, sets in eval/sets/) -------------
-if [ "$BENCHMARK" = 1 ]; then
+if [ "$BENCHMARK" = 1 ] && [ "$VLLM_READY" = 0 ]; then warn "Benchmark skipped: vLLM is not running (see above)."
+elif [ "$BENCHMARK" = 1 ]; then
   say "Benchmark: every course in data/ with a question set; summary in eval/reports/ (hours on a CPU)..."
   # run as this user, so the reports and the parse cache in the project folder stay yours
   # shellcheck disable=SC2086

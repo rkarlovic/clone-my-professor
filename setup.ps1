@@ -254,6 +254,38 @@ Dc up -d --build
 Say "Checking the AI models (missing ones are downloaded once; can take a while)..."
 Dc exec -T api python -m scripts.models --pull
 
+# --- 6b. with a GPU: wait until vLLM has loaded its model -------------------------------------------
+# The first start downloads the model (several GB) before vLLM answers; questions sent earlier
+# fail with "connection refused". If vLLM stops or keeps restarting, show why.
+$vllmReady = $true
+if ($gpu) {
+    $vllmReady = $false
+    Say "Waiting for vLLM to load $(Get-EnvValue "VLLM_MODEL") (the first start downloads it: 10-30 minutes)..."
+    $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+    try {
+        $id = ((& docker @Compose ps -q vllm 2>$null) | Where-Object { "$_" -match "^[0-9a-f]{12,}$" } | Select-Object -First 1)
+        $started = Get-Date; $lastNote = $started
+        while ($id -and ((Get-Date) - $started).TotalMinutes -lt 45) {
+            $st = (& docker inspect --format "{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" $id 2>$null) -split " "
+            if ($st[2] -eq "healthy") { $vllmReady = $true; break }
+            if ($st[0] -in @("exited", "dead") -or [int]$st[1] -gt 0) { break }  # crashed (restarts on its own)
+            if (((Get-Date) - $lastNote).TotalSeconds -ge 60) {
+                $line = (& docker logs --tail 1 $id 2>&1 | ForEach-Object { "$_" }) -join " "
+                if ($line.Length -gt 110) { $line = $line.Substring(0, 110) + "..." }
+                Write-Host ("    {0:N0} min: {1}" -f ((Get-Date) - $started).TotalMinutes, $line)
+                $lastNote = Get-Date
+            }
+            Start-Sleep -Seconds 10
+        }
+        if ($vllmReady) { Say ("vLLM is ready ({0:N0} min)." -f ((Get-Date) - $started).TotalMinutes) }
+        else {
+            Warn "vLLM did not start. Its last log lines:"
+            if ($id) { & docker logs --tail 40 $id 2>&1 | ForEach-Object { "    $_" } | Write-Host }
+            Warn "Look for the cause in docs\GPU-SETUP.md, section 'If something goes wrong'; paste these lines when asking for help."
+        }
+    } finally { $ErrorActionPreference = $old }
+}
+
 # --- 7. wait until CMP answers --------------------------------------------------------------------
 Say "Waiting for ${scheme}://$siteName ..."
 $ok = $false
@@ -286,13 +318,15 @@ if ($WithMoodle) {
 
 
 # --- 9. optional: smoke test ------------------------------------------------------------------------
-if ($Check) {
+if ($Check -and -not $vllmReady) { Warn "Smoke test skipped: vLLM is not running (see above)." }
+elseif ($Check) {
     Say "Smoke test: CMP's own small course and 10 questions (about 12 minutes on a CPU, seconds on a GPU)..."
     & docker @Compose exec -T api python -m scripts.smoketest
     if ($LASTEXITCODE -ne 0) { Warn "The smoke test did not pass; see the lines marked FAIL above." }
 }
 # --- 10. optional: the internal benchmark (course folders in data\, sets in eval\sets\) -------------
-if ($Benchmark) {
+if ($Benchmark -and -not $vllmReady) { Warn "Benchmark skipped: vLLM is not running (see above)." }
+elseif ($Benchmark) {
     Say "Benchmark: every course in data\ with a question set; summary in eval\reports\ (hours on a CPU)..."
     $extra = if ($BenchmarkArgs) { $BenchmarkArgs -split '\s+' } else { @() }
     & docker @Compose run --rm benchmark python -m scripts.benchmark @extra
