@@ -110,7 +110,7 @@ Start-Docker
 # 7-13 GB: the 4B with 4-bit weights, embeddings on the CPU; smaller or none: everything on the CPU.
 $gpu = $false; $gpuOllama = $false; $vramMb = 0; $modelsFile = "models.yaml"
 if (Has "nvidia-smi") {
-    $q = Quiet nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits
+    $q = Quiet nvidia-smi '--query-gpu=memory.total' '--format=csv,noheader,nounits'  # quoted: unquoted commas would split it
     if ($LASTEXITCODE -eq 0 -and $q -match "^\s*(\d+)") { $vramMb = [int]$Matches[1] }
 }
 if ($vramMb -ge 22000) { $gpu = $true; $gpuOllama = $true; $modelsFile = "models.vllm.yaml" }
