@@ -195,6 +195,8 @@ _Update this section when a build step's state changes._
 **Step 2 part A (answers): started 2026-11-14, see the step 2 block below.**
 **Step 3 (product): started 2026-11-17 with direct upload, see the step 3 block below.**
 **Step 4 (Moodle connector): done except SRCE/Merlin access (needs their approval).**
+**GPU path: first run on an 8 GB RTX A1000 passed the smoke test 2026-11-23 (see "Models file by
+GPU memory" below).**
 **Step 5 (Teams, Google Classroom): material-sync connectors built 2026-11-18; Teams opens
 CMP through the Teams tab app; Classroom has no student entry yet (neither platform launches
 LTI 1.3 tools, checked 2026-11-19). Not yet tried with a real tenant or Workspace. See
@@ -1437,6 +1439,17 @@ Teams and Classroom (2026-11-18).**
     memory left: 8 GB card, 7.03 GB free under Windows, 0.80 → 6.4 GB, weights + overhead 4.59 GB,
     KV 1.49 GB). Now `--max-num-seqs 16` in all three files and 0.85 for the 8 GB file. The setup
     waits for vLLM (healthy, or a new restart → its error lines) before the smoke test.
+  - **Then it ran (2026-11-23): smoke test PASSED 10/10 on the GPU**, models `vllm8-2026-11-19.1`
+    (Qwen 3.5 4B, 4-bit, vLLM 0.32, `--max-num-seqs 16`, 0.85): vLLM ready 2 min after the start
+    (weights cached), course processed in 24 s, the 7 answers **4–12 s each** (same PC on the CPU
+    path: ~200 s; this laptop's CPU: 60–82 s), each citing its slide (incl. no-diacritics and
+    English), the 3 forwards `admin`, `admin`, `out_of_scope`; 70 s in total. First run of the
+    whole GPU path (setup, vLLM, LiteLLM `hosted_vllm`, thinking off). The 4B is the 8 GB card's
+    model, not a model choice; the benchmark on that PC is next.
+  - Setup fixes found on that PC (Windows PowerShell 5.1): `docker info` with stderr redirected
+    stopped the script under `ErrorActionPreference = Stop` when Docker was down (now through the
+    `Quiet` helper, which also passed a single argument letter by letter); PowerShell split
+    `--format=csv,noheader,nounits` at the commas (now quoted).
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see

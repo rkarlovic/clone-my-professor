@@ -278,8 +278,11 @@ fixed, a 144-second answer now arrives in full.
 - **Any NVIDIA card size (2026-11-19):** the setup now reads how much memory the graphics card
   has and picks a model that fits: the full Qwen 3.5 9B on 24 GB or more, a compressed 9B on
   16 GB, a compressed 4B on 8 GB (such as the RTX A1000 test PC). vLLM downloads it by itself.
-  On Windows it also checks Docker's share of the PC's memory and offers to raise it. Not yet
-  tried on a real GPU.
+  On Windows it also checks Docker's share of the PC's memory and offers to raise it.
+- **First run on a graphics card (2026-11-23):** on a test PC with an 8 GB NVIDIA RTX A1000 the
+  smoke test passed 10 of 10, with each answer in **4–12 seconds** instead of 1–3 minutes on a
+  processor. Getting there took a few fixes to the setup script and to how much of the card's
+  memory the model server may use. Next: the full benchmark on that PC.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
