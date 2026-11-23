@@ -206,8 +206,15 @@ if [ "$GPU" = 1 ]; then
   done
   if [ "$VLLM_READY" = 1 ]; then say "vLLM is ready ($(( ($(date +%s) - STARTED) / 60 )) min)."
   else
-    warn "vLLM did not start. Its last log lines:"
-    [ -n "$VLLM_ID" ] && docker logs --tail 40 "$VLLM_ID" 2>&1 | sed 's/^/    /'
+    warn "vLLM did not start. From its log:"
+    if [ -n "$VLLM_ID" ]; then
+      # the reason is above the traceback that ends the log: show the error lines first
+      echo "    The errors:"
+      docker logs --tail 600 "$VLLM_ID" 2>&1 | grep -E '(Error|Exception)[:(]|out of memory|exceeds|Killed' \
+        | grep -vE '(File "|[[:space:]]raise )' | awk '!seen[$0]++' | tail -12 | sed 's/^/    /'
+      echo "    The last lines:"
+      docker logs --tail 8 "$VLLM_ID" 2>&1 | sed 's/^/    /'
+    fi
     warn "Look for the cause in docs/GPU-SETUP.md, section 'If something goes wrong'; paste these lines when asking for help."
   fi
 fi

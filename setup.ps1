@@ -288,8 +288,14 @@ if ($gpu) {
         }
         if ($vllmReady) { Say ("vLLM is ready ({0:N0} min)." -f ((Get-Date) - $started).TotalMinutes) }
         else {
-            Warn "vLLM did not start. Its last log lines:"
-            if ($id) { VllmLog $id 40 | ForEach-Object { Write-Host "    $_" } }
+            Warn "vLLM did not start. From its log:"
+            if ($id) {
+                # the reason is above the traceback that ends the log: show the error lines first
+                $all = @(VllmLog $id 600)
+                $why = @($all | Where-Object { $_ -match '(Error|Exception)[:(]|out of memory|exceeds|Killed' -and $_ -notmatch '(File "|\braise )' } | Select-Object -Unique -Last 12)
+                if ($why.Count) { Write-Host "    The errors:"; $why | ForEach-Object { Write-Host "    $_" } }
+                Write-Host "    The last lines:"; $all | Select-Object -Last 8 | ForEach-Object { Write-Host "    $_" }
+            }
             Warn "Look for the cause in docs\GPU-SETUP.md, section 'If something goes wrong'; paste these lines when asking for help."
         }
     } finally { $ErrorActionPreference = $old }
