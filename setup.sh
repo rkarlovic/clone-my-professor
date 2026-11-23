@@ -191,11 +191,13 @@ if [ "$GPU" = 1 ]; then
   say "Waiting for vLLM to load $(get_env VLLM_MODEL) (the first start downloads it: 10-30 minutes)..."
   VLLM_ID="$("${COMPOSE[@]}" ps -q vllm 2>/dev/null | grep -E "^[0-9a-f]{12,}$" | head -1)"
   STARTED=$(date +%s); LAST_NOTE=$STARTED
+  # restarts from earlier runs do not count, only a crash while we wait
+  RESTARTS0="$(docker inspect --format '{{.RestartCount}}' "$VLLM_ID" 2>/dev/null || echo 0)"
   while [ -n "$VLLM_ID" ] && [ $(( $(date +%s) - STARTED )) -lt 2700 ]; do
     read -r V_STATUS V_RESTARTS V_HEALTH <<< "$(docker inspect --format '{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "$VLLM_ID" 2>/dev/null)"
     if [ "$V_HEALTH" = healthy ]; then VLLM_READY=1; break; fi
     case "$V_STATUS" in exited|dead) break ;; esac
-    [ "${V_RESTARTS:-0}" -gt 0 ] && break  # crashed (restarts on its own)
+    [ "${V_RESTARTS:-0}" -gt "${RESTARTS0:-0}" ] && break  # crashed (restarts on its own)
     if [ $(( $(date +%s) - LAST_NOTE )) -ge 60 ]; then
       echo "    $(( ($(date +%s) - STARTED) / 60 )) min: $(docker logs --tail 1 "$VLLM_ID" 2>&1 | cut -c1-110)"
       LAST_NOTE=$(date +%s)

@@ -260,17 +260,26 @@ Dc exec -T api python -m scripts.models --pull
 $vllmReady = $true
 if ($gpu) {
     $vllmReady = $false
+    # vLLM writes to stderr; PowerShell 5.1 wraps those lines (an empty one shows as
+    # "System.Management.Automation.RemoteException"), so unwrap them and drop empty lines
+    function VllmLog($id, $n) {
+        & docker logs --tail $n $id 2>&1 | ForEach-Object {
+            if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { "$_" }
+        } | Where-Object { $_.Trim() -and $_ -ne "System.Management.Automation.RemoteException" }
+    }
     Say "Waiting for vLLM to load $(Get-EnvValue "VLLM_MODEL") (the first start downloads it: 10-30 minutes)..."
     $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
     try {
         $id = ((& docker @Compose ps -q vllm 2>$null) | Where-Object { "$_" -match "^[0-9a-f]{12,}$" } | Select-Object -First 1)
         $started = Get-Date; $lastNote = $started
+        # restarts from earlier runs do not count, only a crash while we wait
+        $restarts0 = [int]((& docker inspect --format "{{.RestartCount}}" $id 2>$null) | Select-Object -First 1)
         while ($id -and ((Get-Date) - $started).TotalMinutes -lt 45) {
             $st = (& docker inspect --format "{{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{end}}" $id 2>$null) -split " "
             if ($st[2] -eq "healthy") { $vllmReady = $true; break }
-            if ($st[0] -in @("exited", "dead") -or [int]$st[1] -gt 0) { break }  # crashed (restarts on its own)
+            if ($st[0] -in @("exited", "dead") -or [int]$st[1] -gt $restarts0) { break }  # crashed (restarts on its own)
             if (((Get-Date) - $lastNote).TotalSeconds -ge 60) {
-                $line = (& docker logs --tail 1 $id 2>&1 | ForEach-Object { "$_" }) -join " "
+                $line = (VllmLog $id 1) -join " "
                 if ($line.Length -gt 110) { $line = $line.Substring(0, 110) + "..." }
                 Write-Host ("    {0:N0} min: {1}" -f ((Get-Date) - $started).TotalMinutes, $line)
                 $lastNote = Get-Date
@@ -280,7 +289,7 @@ if ($gpu) {
         if ($vllmReady) { Say ("vLLM is ready ({0:N0} min)." -f ((Get-Date) - $started).TotalMinutes) }
         else {
             Warn "vLLM did not start. Its last log lines:"
-            if ($id) { & docker logs --tail 40 $id 2>&1 | ForEach-Object { "    $_" } | Write-Host }
+            if ($id) { VllmLog $id 40 | ForEach-Object { Write-Host "    $_" } }
             Warn "Look for the cause in docs\GPU-SETUP.md, section 'If something goes wrong'; paste these lines when asking for help."
         }
     } finally { $ErrorActionPreference = $old }
