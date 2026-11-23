@@ -83,23 +83,25 @@ Set-Location $Root
 # under "Stop"); returns its output as text.
 function Quiet {
     $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-    try { $exe, $rest = $args; (& $exe @rest 2>$null | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $old }
+    # @() keeps one argument a list: splatting a bare string would pass it letter by letter
+    $exe = $args[0]; $rest = @($args | Select-Object -Skip 1)
+    try { (& $exe @rest 2>$null | ForEach-Object { "$_" }) -join "`n" } finally { $ErrorActionPreference = $old }
 }
 function Start-Docker {
-    docker info *> $null
+    $null = Quiet docker info
     if ($LASTEXITCODE -eq 0) { return }
     $desktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
     if (Test-Path $desktop) {
-        Say "Starting Docker Desktop..."
+        Say "Starting Docker Desktop (the first time it shows a window: accept the agreement there; signing in is not needed)..."
         Start-Process $desktop
-        for ($i = 0; $i -lt 60; $i++) {
+        for ($i = 0; $i -lt 120; $i++) {
             Start-Sleep -Seconds 5
-            docker info *> $null
+            $null = Quiet docker info
             if ($LASTEXITCODE -eq 0) { break }
         }
     }
-    docker info *> $null
-    if ($LASTEXITCODE -ne 0) { Fail "Docker is not running. Start Docker Desktop and run this script again." }
+    $null = Quiet docker info
+    if ($LASTEXITCODE -ne 0) { Fail "Docker is not running. Open Docker Desktop, wait until it says 'Engine running' (bottom left), then run this script again." }
 }
 Start-Docker
 
