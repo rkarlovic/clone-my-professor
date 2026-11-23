@@ -1411,7 +1411,7 @@ Teams and Classroom (2026-11-18).**
     unquantized).
   - New `serve_args` field in the models file (`llm/config.py`): vLLM's start flags,
     `--language-model-only` (skips the vision encoder; the `vision` role is on Ollama), the memory
-    share and `--max-model-len` (8 GB file: 0.80 and 8192, room for a monitor on the card; a
+    share and `--max-model-len` (8 GB file: 0.85 and 8192; a
     question with five slides is ~2–4k tokens). `infra/docker-compose.gpu.yml` starts
     `vllm serve "$VLLM_MODEL" $VLLM_ARGS` through `/bin/sh -c` (the image's entrypoint is
     `vllm serve`; argument splitting checked with a stand-in container) and passes
@@ -1433,8 +1433,10 @@ Teams and Classroom (2026-11-18).**
     earlier runs). vLLM loaded the 4-bit 4B in ~20 s (4.41 GiB) and then refused to start:
     `max_num_seqs (256) exceeds available Mamba cache blocks (82)` (Qwen 3.5's linear-attention
     layers need one cache block per running sequence). All three vLLM files now add
-    `--max-num-seqs 32`. The setup waits for vLLM (healthy, or a new restart → its last 40 log
-    lines) before the smoke test.
+    `--max-num-seqs 32`; the next start reported only **30** blocks (the count depends on the KV
+    memory left: 8 GB card, 7.03 GB free under Windows, 0.80 → 6.4 GB, weights + overhead 4.59 GB,
+    KV 1.49 GB). Now `--max-num-seqs 16` in all three files and 0.85 for the 8 GB file. The setup
+    waits for vLLM (healthy, or a new restart → its error lines) before the smoke test.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
