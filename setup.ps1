@@ -9,6 +9,14 @@
   With -WithMoodle it also starts a local test Moodle connected to CMP; with -WithTracing,
   Langfuse for tracing every answer (once chosen, it stays on in later runs).
 
+.NOTES
+  If Windows says "running scripts is disabled on this system", put
+  powershell -ExecutionPolicy Bypass -File in front, with the same switches, e.g.
+      powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Install -Check
+  To allow it for good (your Windows user only; README, "running scripts is disabled"):
+      Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+      Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File   (in the project folder)
+
 .EXAMPLE
   .\setup.ps1                  # check, set up, start
   .\setup.ps1 -Install         # also install missing Git / Docker Desktop (needs admin rights)

@@ -373,6 +373,47 @@ can install both itself. Windows (PowerShell):
 .\setup.ps1 -Stop          # stop everything (data is kept); -Status shows the containers
 ```
 
+### "running scripts is disabled on this system"
+
+Windows blocks PowerShell scripts on many PCs (company and school PCs especially). Then
+`.\setup.ps1` stops at once with:
+
+```text
+.\setup.ps1 : File C:\...\setup.ps1 cannot be loaded because running scripts is disabled on this
+system. For more information, see about_Execution_Policies at https:/go.microsoft.com/fwlink/?LinkID=135170.
+    + FullyQualifiedErrorId : UnauthorizedAccess
+```
+
+**Fix for one run:** put `powershell -ExecutionPolicy Bypass -File` in front of the command. The
+switches after `.\setup.ps1` stay exactly the same:
+
+| instead of | type |
+|---|---|
+| `.\setup.ps1` | `powershell -ExecutionPolicy Bypass -File .\setup.ps1` |
+| `.\setup.ps1 -Install -Check` | `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Install -Check` |
+| `.\setup.ps1 -Benchmark -BenchmarkArgs "--retrieval-only"` | `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Benchmark -BenchmarkArgs "--retrieval-only"` |
+| `.\setup.ps1 -Stop` | `powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Stop` |
+
+This changes nothing on the PC: it allows only this one run of this one script.
+
+**Fix for good (optional):** allow scripts for your own Windows user, then unblock the project's
+scripts. Run both in PowerShell, the second one inside the project folder:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Get-ChildItem -Recurse -Filter *.ps1 | Unblock-File
+```
+
+- The first allows scripts made on this PC and signed downloaded ones, for your user only (no
+  admin rights needed; it changes a Windows security setting, so it is your choice).
+- The second is needed because the project came as a ZIP from the internet: Windows marks such
+  files as "downloaded" and still blocks them. Run it again after downloading a new ZIP; running
+  it again any time does no harm.
+
+After that the short form `.\setup.ps1 …` works. To undo the first command later:
+`Set-ExecutionPolicy -Scope CurrentUser Undefined`. If your organisation sets the policy centrally,
+the first command fails with a message saying so; then use the one-run fix above.
+
 Linux / macOS:
 
 ```bash
