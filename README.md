@@ -282,7 +282,10 @@ fixed, a 144-second answer now arrives in full.
 - **First run on a graphics card (2026-11-23):** on a test PC with an 8 GB NVIDIA RTX A1000 the
   smoke test passed 10 of 10, with each answer in **4–12 seconds** instead of 1–3 minutes on a
   processor. Getting there took a few fixes to the setup script and to how much of the card's
-  memory the model server may use. Next: the full benchmark on that PC.
+  memory the model server may use.
+- **First benchmark on the graphics card (2026-11-24):** a short run (5 questions per set) on
+  that PC. Search gives the same results as on the laptop, so the setup is right; answers take
+  6–36 seconds each including the checks, instead of about 2 minutes. The full run is next.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom

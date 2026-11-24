@@ -351,7 +351,9 @@ elseif ($Check) {
 if ($Benchmark -and -not $vllmReady) { Warn "Benchmark skipped: vLLM is not running (see above)." }
 elseif ($Benchmark) {
     Say "Benchmark: every course in data\ with a question set; summary in eval\reports\ (hours on a CPU)..."
-    $extra = if ($BenchmarkArgs) { $BenchmarkArgs -split '\s+' } else { @() }
+    # @() keeps one option a list: PowerShell unwraps a one-item result to a string, and
+    # splatting a string passes it letter by letter ("--retrieval-only" -> "- - r e t ...")
+    $extra = @(if ($BenchmarkArgs.Trim()) { $BenchmarkArgs.Trim() -split '\s+' })
     & docker @Compose run --rm benchmark python -m scripts.benchmark @extra
     if ($LASTEXITCODE -ne 0) { Warn "The benchmark reported failed steps; see 'Failed' at the end of its output." }
 }

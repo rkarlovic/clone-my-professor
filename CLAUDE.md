@@ -1449,7 +1449,21 @@ Teams and Classroom (2026-11-18).**
   - Setup fixes found on that PC (Windows PowerShell 5.1): `docker info` with stderr redirected
     stopped the script under `ErrorActionPreference = Stop` when Docker was down (now through the
     `Quiet` helper, which also passed a single argument letter by letter); PowerShell split
-    `--format=csv,noheader,nounits` at the commas (now quoted).
+    `--format=csv,noheader,nounits` at the commas (now quoted). `-BenchmarkArgs` with a single
+    option ("--retrieval-only") reached the benchmark letter by letter (a one-item `if` result is
+    unwrapped to a string before splatting); now wrapped in `@()`. Two options worked.
+  - **First benchmark on that PC (2026-11-24), `--limit 5`**, models `vllm8-2026-11-19.1`
+    (4-bit 4B), both courses ingested fresh in the container (no parse cache copied: Java
+    parse 591 s, gifted-children 170 s; **743 chunks / 60 parents / 5 folds** for the Java PDF
+    vs 758 / 67 / 8 on this laptop, 420 vs 419 for gifted-children, cause not checked: a fresh
+    parse vs the laptop's older cache). Search (whole sets, dense k=5) still matches the laptop:
+    Java golden easy 1.00 / 1.00, hard 0.84 / 0.57 (misses h03 h14 h15), teacher 0.98 / 0.91
+    (t02), check 0.80 / 0.66; gifted-children teacher 0.90 / 0.75, check 0.82 / 0.64, students
+    1.00. Answers (5 per set, 40 in all): 6–36 s each incl. check and judge (laptop CPU ~130 s);
+    total 27 min 42 s incl. ingest. Answerable questions answered citing the expected slide
+    except gifted c005 and Java t02 (`no_source`, t02 the known retrieval miss); must-forward
+    1 of 3 (gifted t02 and s04, handbook-only, answered). The 4B judge often gave no on-topic
+    verdict (`null` in 8 of 25). Too few questions to judge the 4B; the full run is next.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
