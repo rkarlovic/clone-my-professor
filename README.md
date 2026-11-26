@@ -292,6 +292,11 @@ fixed, a 144-second answer now arrives in full.
   teacher, but it answers fewer good questions than the bigger model on the laptop, and it
   answers about half of the questions whose answer is only in the course handbook. So it is
   good for testing, not for students. Choosing the model needs a card with 24 GB.
+- **Why the small model lost good answers (2026-11-26):** in 38 of the 50 good questions it
+  sent to the teacher, it had written a sensible answer but forgot the source numbers, and CMP
+  never shows an answer without sources. Now CMP asks the model once more to add them; the
+  answer is still checked as before. The next benchmark on the GPU PC shows how much that
+  brings back.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom

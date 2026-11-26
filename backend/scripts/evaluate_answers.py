@@ -167,6 +167,7 @@ def score(q: Question, a: Answer) -> dict:
         "check": a.check,
         "answer": a.text,
         "raw": a.raw,
+        "raw_uncited": a.raw_uncited,  # set when the first reply cited nothing (asked again)
         "cited_pages": cited_pages,
         "seen_pages": seen_pages,
         "seconds": a.seconds,
@@ -218,7 +219,7 @@ def summarise(results: list[dict]) -> dict:
                 "n": n,
                 "forwarded": round(sum(r["forwarded"] is not None for r in rs) / n, 3),
                 "outcomes": dict(reasons),
-            }
+            } | _retries(rs)
             continue
         answered = [r for r in rs if not r["forwarded"]]
         s = {
@@ -237,8 +238,21 @@ def summarise(results: list[dict]) -> dict:
                 forwards[r["forwarded"]] += 1
         if forwards:
             s["wrongly_forwarded"] = dict(forwards)
-        summary[name] = s
+        summary[name] = s | _retries(rs)
     return summary
+
+
+def _retries(rs: list[dict]) -> dict:
+    """Answers that cited nothing and were asked again: how many then reached the student."""
+    retried = [r for r in rs if r.get("raw_uncited")]
+    if not retried:
+        return {}
+    return {
+        "cite_retry": {
+            "asked": len(retried),
+            "answered": sum(1 for r in retried if not r["forwarded"]),
+        }
+    }
 
 
 if __name__ == "__main__":

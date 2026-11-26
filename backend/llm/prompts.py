@@ -43,6 +43,14 @@ Pravila koja uvijek vrijede:
 {sources}
 
 Pitanje studenta: {question}""",
+    # Sent once, as the next turn of the same conversation, when an answer cites no source and
+    # is not a refusal: on the 8 GB GPU benchmark (2026-11-24) the 4B left out the [n] numbers
+    # in 38 of the 50 good answers it forwarded.
+    "cite_retry": f"""U tvom odgovoru nema brojeva izvora. Napiši isti odgovor ponovno, ne mijenjaj
+mu sadržaj, i iza svake tvrdnje dodaj broj izvora iz kojeg je, u uglatim zagradama, npr. [1] ili
+[2][3]. Koristi samo brojeve izvora koje si dobio. Tvrdnju koje nema ni u jednom izvoru izostavi.
+Ako nijedna tvrdnja nije iz izvora, napiši samo {DONT_KNOW}
+Napiši samo odgovor, bez uvoda.""",
     # Scope check for the `fast` role: one word, before retrieval.
     "scope_check": """Ti razvrstavaš pitanja studenata za AI asistenta kolegija „{subject}".
 Teme kolegija (predavanja):

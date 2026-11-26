@@ -243,6 +243,62 @@ def test_admin_label_still_forwards_at_once(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.forwarded is ForwardReason.admin and result.raw is None
 
 
+def _pipeline_calls(
+    monkeypatch: pytest.MonkeyPatch, replies: list[str]
+) -> tuple[answer.Answer, list[list[dict]]]:
+    """Like `_pipeline`, but the answer model gives `replies` in turn; returns its calls."""
+    monkeypatch.setattr(answer, "_subject", lambda kb: ("Predmet", ["Tema"]))
+    monkeypatch.setattr(answer, "search", lambda *a, **kw: [_hit(1), _hit(2)])
+    monkeypatch.setattr(answer, "answer_check", lambda q, t, c: {"ODGOVARA": True})
+    calls: list[list[dict]] = []
+    queue = list(replies)
+
+    def complete(role: str, messages: list[dict]) -> str:
+        if role == "fast":
+            return "GRADIVO"
+        calls.append(messages)
+        return queue.pop(0)
+
+    monkeypatch.setattr(answer, "complete", complete)
+    return answer.answer_question(uuid.uuid4(), "Što je konstruktor?"), calls
+
+
+def test_answer_without_citations_is_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    uncited = "Konstruktor nema povratni tip."
+    result, calls = _pipeline_calls(monkeypatch, [uncited, "Konstruktor nema povratni tip [2]."])
+    assert result.forwarded is None
+    assert result.text == "Konstruktor nema povratni tip [2]."
+    assert [s.n for s in result.cited] == [2]
+    assert result.raw_uncited == uncited and "cite_retry" in result.seconds
+    # the same conversation, continued: the first reply as the assistant's turn, then the ask
+    retry = calls[1]
+    assert retry[:2] == calls[0]
+    assert retry[2] == {"role": "assistant", "content": uncited}
+    assert retry[3]["role"] == "user" and "[1]" in retry[3]["content"]
+
+
+@pytest.mark.parametrize(
+    "second",
+    ["Konstruktor nema povratni tip.", DONT_KNOW, "Konstruktor nema povratni tip [9]."],
+)
+def test_retry_without_real_citations_still_forwards(
+    monkeypatch: pytest.MonkeyPatch, second: str
+) -> None:
+    result, calls = _pipeline_calls(monkeypatch, ["Konstruktor nema povratni tip.", second])
+    assert result.forwarded is ForwardReason.no_source and len(calls) == 2
+
+
+@pytest.mark.parametrize(
+    "first",
+    [DONT_KNOW, "U izvorima se ne nalazi odgovor na to pitanje.", "Konstruktor [1] nema tip."],
+)
+def test_refusals_and_cited_answers_are_not_asked_again(
+    monkeypatch: pytest.MonkeyPatch, first: str
+) -> None:
+    result, calls = _pipeline_calls(monkeypatch, [first])
+    assert len(calls) == 1 and result.raw_uncited is None
+
+
 def test_refusal_with_navode_and_opisuju_is_mostly_refusal() -> None:
     t25 = (
         "Materijali pokrivaju definiciju kompozicije i agregacije [2]. Međutim, izvori ne navode "

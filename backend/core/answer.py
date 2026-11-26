@@ -1,7 +1,8 @@
 """Answer a student's question from one kb_version, or forward it to the teacher.
 
     scope check (`fast`) -> retrieval -> score floor -> grounded answer (`answer`)
-    -> citation check -> answer check (`check`)
+    -> citation check (an answer citing nothing is asked once more for citations)
+    -> answer check (`check`)
 
 Rules (CLAUDE.md): answers come only from the version's sources and cite them (1); anything the
 clone cannot ground, and every admin question, is forwarded (2); retrieval is scoped to the
@@ -121,6 +122,7 @@ class Answer:
     sources: list[Source] = field(default_factory=list)  # what the model saw
     cited: list[Source] = field(default_factory=list)  # what the answer cites
     raw: str | None = None  # model output before the citation check
+    raw_uncited: str | None = None  # the first reply, when it cited nothing and was asked again
     scope: str | None = None  # the scope check's label
     check: dict[str, bool | None] = field(default_factory=dict)  # the answer check's verdicts
     trace: dict = field(default_factory=dict)
@@ -180,7 +182,7 @@ def _answer_question(
         "models": {"fast": trace_metadata("fast"), "answer": trace_metadata("answer")}
         | ({"check": trace_metadata("check")} if check else {}),
         "prompt_version": prompt_version(
-            ["answer_system", "persona_header", "answer_user"], "answer"
+            ["answer_system", "persona_header", "answer_user", "cite_retry"], "answer"
         ),
         "scope_prompt_version": prompt_version(["scope_check"], "fast"),
         "check_prompt_version": prompt_version(["answer_check"], "check") if check else None,
@@ -215,12 +217,26 @@ def _answer_question(
     )
     stage("answer")
     started = time.time()
-    result.raw = complete(
-        "answer", [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    ).strip()
+    messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    result.raw = complete("answer", messages).strip()
     result.seconds["answer"] = round(time.time() - started, 1)
 
     text, cited = check_citations(result.raw, result.sources)
+    if text is None and not is_refusal(result.raw):
+        # An answer without a single [n]: ask once for the same answer with citations. Rule 1
+        # still holds: the citation check and the answer check below judge the new reply.
+        started = time.time()
+        result.raw_uncited = result.raw
+        result.raw = complete(
+            "answer",
+            messages
+            + [
+                {"role": "assistant", "content": result.raw},
+                {"role": "user", "content": prompt("cite_retry", "answer")},
+            ],
+        ).strip()
+        result.seconds["cite_retry"] = round(time.time() - started, 1)
+        text, cited = check_citations(result.raw, result.sources)
     if text is None:
         return forward(ForwardReason.no_source)
     result.text, result.cited = text, cited
@@ -329,7 +345,7 @@ def check_citations(raw: str, sources: list[Source]) -> tuple[str | None, list[S
     """(answer text, cited sources), or (None, []) when the reply must not reach the student:
     the model said it does not know (even next to a partial answer), or cited no real source.
     Citation numbers that point at no source are removed from the text."""
-    if not raw or DONT_KNOW in raw.upper().replace(" ", "_") or is_prose_refusal(raw):
+    if is_refusal(raw):
         return None, []
     by_n = {s.n: s for s in sources}
     cited: dict[int, Source] = {}
@@ -344,6 +360,11 @@ def check_citations(raw: str, sources: list[Source]) -> tuple[str | None, list[S
     if not cited:
         return None, []
     return text, sorted(cited.values(), key=lambda s: s.n)
+
+
+def is_refusal(raw: str | None) -> bool:
+    """The model did not answer: empty, NE_ZNAM anywhere, or a refusal written as prose."""
+    return not raw or DONT_KNOW in raw.upper().replace(" ", "_") or is_prose_refusal(raw)
 
 
 def is_prose_refusal(raw: str) -> bool:

@@ -1490,6 +1490,34 @@ Teams and Classroom (2026-11-18).**
     - What the run shows: the GPU path, the benchmark command and the reports work end to end
       on one card, at a speed where a full benchmark per model is practical. The model choice
       needs a 24 GB card (Qwen 3.5 9B bf16, Mistral Small 4, Gemma 4).
+    - **Why (reports read 2026-11-26):** of the 50 good questions the 4B forwarded, **38 had a
+      sensible answer from the right slide with no `[n]` at all** (reason `no_source`, no
+      `NE_ZNAM`); 5 more cited sources but were refusals, the rest other reasons. Of the 13
+      handbook-only questions it answered, the 4B check said ODGOVARA=DA for all: answers
+      stretched from a list slide (x07, x13), a slide attributed to Rajović (x03), the Italian
+      questions from this course's assessment pages; t30, t33, t54 may be labels to re-check
+      (the material may answer them). "Is the final exam oral or written?" (English, no
+      `ADMIN_TERMS` word) was answered from the pages on adapted exams.
+    - The user has no 24 GB card (decided 2026-11-26): work with the 8 GB card, i.e. the best
+      setup that runs on it.
+- **Citation retry (2026-11-26):** an answer that cites no source and is not a refusal (no
+  `NE_ZNAM`, no prose refusal) is asked once more in the same conversation (prompt
+  `cite_retry`: the same answer, unchanged, with `[n]` after each claim, only the given
+  numbers, claims in no source left out, `NE_ZNAM` if none). The new reply goes through the
+  citation check and the live answer check like any other (rule 1 unchanged). Model-neutral:
+  any model that drops citations benefits; a model that cites never pays. The first reply is
+  kept as `Answer.raw_uncited`, the time as `seconds.cite_retry`; `evaluate_answers` reports
+  `cite_retry: {asked, answered}` per group. Tests: retry continues the conversation, a retry
+  without real citations still forwards, refusals and cited answers are not asked again.
+  Answer prompt version changes (it includes `cite_retry`). Rule 10: the full benchmark on the
+  GPU PC is the check.
+  - Tried on this laptop with the dev 4B as `answer` (scratch config; a working check, not a
+    decision: Ollama's GGUF 4B behaves differently from vLLM's w4a16 build). Six of the GPU
+    run's uncited gifted-children questions asked afresh: the Ollama 4B cited in all six (no
+    retry; 5 answered citing an expected slide, t09 `NE_ZNAM`). Then the GPU 4B's own uncited
+    replies for t07, t12, t40 fed in as the first reply: **all three answered after the retry,
+    each citing an expected slide**, text unchanged apart from the numbers (t12 also dropped
+    a sentence about jobs that is in no source); retry 42–52 s each on CPU.
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see
