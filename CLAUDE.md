@@ -1464,6 +1464,32 @@ Teams and Classroom (2026-11-18).**
     except gifted c005 and Java t02 (`no_source`, t02 the known retrieval miss); must-forward
     1 of 3 (gifted t02 and s04, handbook-only, answered). The 4B judge often gave no on-topic
     verdict (`null` in 8 of 25). Too few questions to judge the 4B; the full run is next.
+  - **Full benchmark on that PC (2026-11-24)**, same models, v1 of both courses (dense k=5,
+    no `--context`), live check and judge on: **391 questions in 82 min 23 s** (~12.6 s per
+    question incl. check and judge; the laptop's CPU needs ~130 s, i.e. ~14 h for the same).
+    Summary only (per-question reports stay on that PC, git-ignored):
+
+    | course / set | answered | cites expected | judge grounded | must-forward forwarded | laptop, 9B on CPU |
+    |---|---|---|---|---|---|
+    | Java golden easy (25) | 0.88 | 0.88 | 1.00 | | 1.00 / 1.00 |
+    | Java golden hard (19) | 0.89 | 0.79 | 0.82 | | 0.89 / 0.84 (v3, with context) |
+    | Java golden abstain (6) | | | | **6/6** | 6/6 |
+    | Java teacher (60) | 0.87 | 0.83 | 0.98 | | 0.98 / 0.98 |
+    | Java check (60 + 12) | 0.70 | 0.55 | 0.93 | **12/12** | 0.95 / 0.72, 11/12 |
+    | gifted teacher (79 + 28) | 0.85 | 0.72 | 0.91 | **15/28** | sample: 18/18, 12/16 |
+    | gifted students (28 + 2) | 0.96 | 0.93 | 0.82 | 1/2 | |
+    | gifted check (60 + 12) | 0.90 | 0.67 | 0.94 | 11/12 | sample: 5/6, 4/4 |
+
+    - **The 4-bit 4B is not a pilot candidate**, as expected for the 8 GB card's model: on the
+      Java course it forwards good questions (easy 0.88 with retrieval 1.00, teacher 0.87 vs
+      0.98, check 0.70 vs 0.95), and on the gifted-children course it answers about half of
+      the handbook-only questions (15/28 forwarded; the 9B sample forwarded 5/7). Generic
+      abstention (grades, deadlines, off-topic) held: 23/24 across both check sets.
+    - Java answer numbers are not like-for-like with the laptop's: the laptop runs used v3
+      (with context sentences, hard recall 0.89), the GPU PC v1 (no context, 0.84).
+    - What the run shows: the GPU path, the benchmark command and the reports work end to end
+      on one card, at a speed where a full benchmark per model is practical. The model choice
+      needs a 24 GB card (Qwen 3.5 9B bf16, Mistral Small 4, Gemma 4).
 
 Next:
 1. Retrieval experiments left (rerank, `--context`, hybrid and one prompt variant done, see

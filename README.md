@@ -285,7 +285,13 @@ fixed, a 144-second answer now arrives in full.
   memory the model server may use.
 - **First benchmark on the graphics card (2026-11-24):** a short run (5 questions per set) on
   that PC. Search gives the same results as on the laptop, so the setup is right; answers take
-  6–36 seconds each including the checks, instead of about 2 minutes. The full run is next.
+  6–36 seconds each including the checks, instead of about 2 minutes.
+- **Full benchmark on the graphics card (2026-11-24):** all 391 questions of both courses in
+  82 minutes (about 14 hours on the laptop's processor). The small model that fits an 8 GB card
+  (Qwen 3.5 4B) still sends every question about grades, deadlines and other subjects to the
+  teacher, but it answers fewer good questions than the bigger model on the laptop, and it
+  answers about half of the questions whose answer is only in the course handbook. So it is
+  good for testing, not for students. Choosing the model needs a card with 24 GB.
 
 **Next:** the pilot server (rent or buy a GPU; the containers are ready), SRCE's approval for
 Merlin, the teacher's review of the question sets, and trying sign-in, Teams and Classroom
